@@ -23,7 +23,6 @@ export default function FillingPage() {
   const [filterCylinder, setFilterCylinder] = useState('ALL');
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
-  const [useDateFilter, setUseDateFilter] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -46,10 +45,10 @@ export default function FillingPage() {
       const matchStatus = filterStatus === 'ALL' || b.status === filterStatus;
       const matchCyl = filterCylinder === 'ALL' || b.cylinderType?.cylinderSize === filterCylinder;
       const bDate = (b.fillingDate || '').split('T')[0];
-      const matchDate = !useDateFilter || (bDate >= startDate && bDate <= endDate);
+      const matchDate = bDate >= startDate && bDate <= endDate;
       return matchSearch && matchStatus && matchCyl && matchDate;
     });
-  }, [batches, search, filterStatus, filterCylinder, startDate, endDate, useDateFilter]);
+  }, [batches, search, filterStatus, filterCylinder, startDate, endDate]);
 
   // KPIs
   const todayBatches = batches.filter((b) => (b.fillingDate || '').split('T')[0] === today);
@@ -58,7 +57,7 @@ export default function FillingPage() {
   const totalGasUsed = batches.filter((b) => b.status === 'COMPLETED').reduce((s, b) => s + (b.actualGasQty || b.expectedGasQty), 0);
   const inProgressCount = batches.filter((b) => b.status === 'IN_PROGRESS' || b.status === 'PENDING').length;
 
-  const filtersActive = search || filterStatus !== 'ALL' || filterCylinder !== 'ALL' || useDateFilter;
+  const filtersActive = search || filterStatus !== 'ALL' || filterCylinder !== 'ALL' || startDate !== today || endDate !== today;
 
   return (
     <div className="page-content">
@@ -112,18 +111,12 @@ export default function FillingPage() {
           <option value="ALL">All Cylinders</option>
           {cylinderTypes.map((t) => <option key={t} value={t!}>{t}</option>)}
         </select>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--steel)', cursor: 'pointer', userSelect: 'none' }}>
-          <input type="checkbox" checked={useDateFilter} onChange={(e) => setUseDateFilter(e.target.checked)} style={{ cursor: 'pointer' }} />
-          Date Range
-        </label>
-        {useDateFilter && (
-          <>
-            <input className="ab-input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ flex: '0 0 140px' }} />
-            <input className="ab-input" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ flex: '0 0 140px' }} />
-          </>
-        )}
+        <span style={{ fontSize: 12, color: 'var(--steel)', whiteSpace: 'nowrap', alignSelf: 'center' }}>From</span>
+        <input className="ab-input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ flex: '0 0 140px' }} />
+        <span style={{ fontSize: 12, color: 'var(--steel)', whiteSpace: 'nowrap', alignSelf: 'center' }}>To</span>
+        <input className="ab-input" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ flex: '0 0 140px' }} />
         {filtersActive && (
-          <button className="ab-btn ab-btn-outline" style={{ fontSize: 12 }} onClick={() => { setSearch(''); setFilterStatus('ALL'); setFilterCylinder('ALL'); setUseDateFilter(false); }}>
+          <button className="ab-btn ab-btn-outline" style={{ fontSize: 12 }} onClick={() => { setSearch(''); setFilterStatus('ALL'); setFilterCylinder('ALL'); setStartDate(today); setEndDate(today); }}>
             Clear Filters
           </button>
         )}

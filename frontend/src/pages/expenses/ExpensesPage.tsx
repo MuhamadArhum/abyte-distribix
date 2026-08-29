@@ -22,7 +22,6 @@ export default function ExpensesPage() {
   const [filterMethod, setFilterMethod] = useState('ALL');
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
-  const [useDateFilter, setUseDateFilter] = useState(false);
 
   useEffect(() => { load(); }, []);
   const load = async () => {
@@ -68,12 +67,12 @@ export default function ExpensesPage() {
       const matchCat = filterCategory === 'ALL' || e.category === filterCategory;
       const matchMethod = filterMethod === 'ALL' || e.paymentMethod === filterMethod;
       const eDate = (e.expenseDate || '').split('T')[0];
-      const matchDate = !useDateFilter || (eDate >= startDate && eDate <= endDate);
+      const matchDate = eDate >= startDate && eDate <= endDate;
       return matchSearch && matchCat && matchMethod && matchDate;
     });
-  }, [expenses, search, filterCategory, filterMethod, startDate, endDate, useDateFilter]);
+  }, [expenses, search, filterCategory, filterMethod, startDate, endDate]);
 
-  const filtersActive = search || filterCategory !== 'ALL' || filterMethod !== 'ALL' || useDateFilter;
+  const filtersActive = search || filterCategory !== 'ALL' || filterMethod !== 'ALL' || startDate !== today || endDate !== today;
 
   return (
     <div className="page-content">
@@ -124,18 +123,12 @@ export default function ExpensesPage() {
           <option value="ALL">All Methods</option>
           {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--steel)', cursor: 'pointer', userSelect: 'none' }}>
-          <input type="checkbox" checked={useDateFilter} onChange={(e) => setUseDateFilter(e.target.checked)} style={{ cursor: 'pointer' }} />
-          Date Range
-        </label>
-        {useDateFilter && (
-          <>
-            <input className="ab-input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ flex: '0 0 140px' }} />
-            <input className="ab-input" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ flex: '0 0 140px' }} />
-          </>
-        )}
+        <span style={{ fontSize: 12, color: 'var(--steel)', whiteSpace: 'nowrap', alignSelf: 'center' }}>From</span>
+        <input className="ab-input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ flex: '0 0 140px' }} />
+        <span style={{ fontSize: 12, color: 'var(--steel)', whiteSpace: 'nowrap', alignSelf: 'center' }}>To</span>
+        <input className="ab-input" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ flex: '0 0 140px' }} />
         {filtersActive && (
-          <button className="ab-btn ab-btn-outline" style={{ fontSize: 12 }} onClick={() => { setSearch(''); setFilterCategory('ALL'); setFilterMethod('ALL'); setUseDateFilter(false); }}>
+          <button className="ab-btn ab-btn-outline" style={{ fontSize: 12 }} onClick={() => { setSearch(''); setFilterCategory('ALL'); setFilterMethod('ALL'); setStartDate(today); setEndDate(today); }}>
             Clear Filters
           </button>
         )}

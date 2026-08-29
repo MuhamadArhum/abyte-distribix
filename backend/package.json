@@ -7,7 +7,8 @@
     "start": "node dist/main",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "seed:large": "ts-node prisma/seed-large.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.15",

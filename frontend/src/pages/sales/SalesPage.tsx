@@ -22,7 +22,6 @@ export default function SalesPage() {
   const [filterMethod, setFilterMethod] = useState('ALL');
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
-  const [useDateFilter, setUseDateFilter] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -43,10 +42,10 @@ export default function SalesPage() {
       const matchStatus = filterStatus === 'ALL' || s.paymentStatus === filterStatus;
       const matchMethod = filterMethod === 'ALL' || s.paymentMethod === filterMethod;
       const saleDate = s.saleDate?.split('T')[0] || '';
-      const matchDate = !useDateFilter || (saleDate >= startDate && saleDate <= endDate);
+      const matchDate = saleDate >= startDate && saleDate <= endDate;
       return matchSearch && matchStatus && matchMethod && matchDate;
     });
-  }, [sales, search, filterStatus, filterMethod, startDate, endDate, useDateFilter]);
+  }, [sales, search, filterStatus, filterMethod, startDate, endDate]);
 
   // KPIs
   const todaySales = sales.filter((s) => (s.saleDate?.split('T')[0] || '') === today);
@@ -56,7 +55,7 @@ export default function SalesPage() {
   const totalOutstanding = sales.reduce((sum, s) => sum + s.remainingAmount, 0);
   const unpaidCount = sales.filter((s) => s.paymentStatus !== 'PAID').length;
 
-  const filtersActive = search || filterStatus !== 'ALL' || filterMethod !== 'ALL' || useDateFilter;
+  const filtersActive = search || filterStatus !== 'ALL' || filterMethod !== 'ALL' || startDate !== today || endDate !== today;
 
   const methods = [...new Set(sales.map((s) => s.paymentMethod).filter(Boolean))];
 
@@ -117,18 +116,12 @@ export default function SalesPage() {
           <option value="ALL">All Methods</option>
           {methods.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--steel)', cursor: 'pointer', userSelect: 'none' }}>
-          <input type="checkbox" checked={useDateFilter} onChange={(e) => setUseDateFilter(e.target.checked)} style={{ cursor: 'pointer' }} />
-          Date Range
-        </label>
-        {useDateFilter && (
-          <>
-            <input className="ab-input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ flex: '0 0 140px' }} />
-            <input className="ab-input" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ flex: '0 0 140px' }} />
-          </>
-        )}
+        <span style={{ fontSize: 12, color: 'var(--steel)', whiteSpace: 'nowrap', alignSelf: 'center' }}>From</span>
+        <input className="ab-input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ flex: '0 0 140px' }} />
+        <span style={{ fontSize: 12, color: 'var(--steel)', whiteSpace: 'nowrap', alignSelf: 'center' }}>To</span>
+        <input className="ab-input" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ flex: '0 0 140px' }} />
         {filtersActive && (
-          <button className="ab-btn ab-btn-outline" style={{ fontSize: 12 }} onClick={() => { setSearch(''); setFilterStatus('ALL'); setFilterMethod('ALL'); setUseDateFilter(false); }}>
+          <button className="ab-btn ab-btn-outline" style={{ fontSize: 12 }} onClick={() => { setSearch(''); setFilterStatus('ALL'); setFilterMethod('ALL'); setStartDate(today); setEndDate(today); }}>
             Clear Filters
           </button>
         )}

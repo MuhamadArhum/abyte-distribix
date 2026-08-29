@@ -44,6 +44,16 @@ export class CustomersService {
     await this.findOne(id);
     const sales = await this.prisma.sale.findMany({ where: { customerId: id }, orderBy: { saleDate: 'asc' } });
     const payments = await this.prisma.customerPayment.findMany({ where: { customerId: id }, orderBy: { paymentDate: 'asc' } });
-    return { sales, payments };
+
+    const entries: any[] = [
+      ...sales.map((s) => ({ date: s.saleDate, description: `Invoice ${s.invoiceNumber}`, transactionType: 'SALE', debit: s.netTotal, credit: 0, ref: s.invoiceNumber })),
+      ...payments.map((p) => ({ date: p.paymentDate, description: `Payment ${p.paymentNumber}${p.reference ? ' · ' + p.reference : ''}`, transactionType: 'PAYMENT', debit: 0, credit: p.amount, ref: p.paymentNumber })),
+    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    let balance = 0;
+    return entries.map((e) => {
+      balance += e.debit - e.credit;
+      return { ...e, balance };
+    });
   }
 }

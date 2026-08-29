@@ -253,24 +253,33 @@ export default function CustomerDetailPage() {
           {(customer.sales || []).length === 0 ? (
             <div style={{ padding: 40, textAlign: 'center', color: 'var(--steel)', fontSize: 12, fontFamily: 'IBM Plex Mono,monospace' }}>No sales records</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {(customer.sales || []).map((sale) => (
-                <div key={sale.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 16, alignItems: 'center', padding: '11px 14px', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)' }}>
-                  <div>
-                    <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600 }}>{sale.invoiceNumber}</div>
-                    <div style={{ fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>{formatDate(sale.saleDate)}</div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 11, color: 'var(--steel)' }}>Total</div>
-                    <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 700 }}>{formatCurrency(sale.netTotal)}</div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 11, color: 'var(--steel)' }}>Remaining</div>
-                    <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 700, color: sale.remainingAmount > 0 ? 'var(--amber-warn)' : 'var(--green-ok)' }}>{formatCurrency(sale.remainingAmount)}</div>
-                  </div>
-                  <span className={`pill ${sale.paymentStatus === 'PAID' ? 'pill-green' : sale.paymentStatus === 'PARTIAL' ? 'pill-amber' : 'pill-red'}`}>{sale.paymentStatus}</span>
-                </div>
-              ))}
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Invoice #</th>
+                    <th>Date</th>
+                    <th>Payment Method</th>
+                    <th style={{ textAlign: 'right' }}>Total</th>
+                    <th style={{ textAlign: 'right' }}>Paid</th>
+                    <th style={{ textAlign: 'right' }}>Remaining</th>
+                    <th style={{ textAlign: 'center' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(customer.sales || []).map((sale) => (
+                    <tr key={sale.id}>
+                      <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600 }}>{sale.invoiceNumber}</span></td>
+                      <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{formatDate(sale.saleDate)}</span></td>
+                      <td><span className="pill pill-steel">{sale.paymentMethod}</span></td>
+                      <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 700 }}>{formatCurrency(sale.netTotal)}</span></td>
+                      <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, color: 'var(--green-ok)' }}>{formatCurrency(sale.paidAmount)}</span></td>
+                      <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 700, color: sale.remainingAmount > 0 ? 'var(--amber-warn)' : 'var(--steel)' }}>{formatCurrency(sale.remainingAmount)}</span></td>
+                      <td style={{ textAlign: 'center' }}><span className={`pill ${sale.paymentStatus === 'PAID' ? 'pill-green' : sale.paymentStatus === 'PARTIAL' ? 'pill-amber' : 'pill-red'}`}>{sale.paymentStatus}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -282,19 +291,31 @@ export default function CustomerDetailPage() {
           {(customer.customerPayments || []).length === 0 ? (
             <div style={{ padding: 40, textAlign: 'center', color: 'var(--steel)', fontSize: 12, fontFamily: 'IBM Plex Mono,monospace' }}>No payment records</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {(customer.customerPayments || []).map((pay) => (
-                <div key={pay.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 16, alignItems: 'center', padding: '11px 14px', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)' }}>
-                  <div>
-                    <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600 }}>{pay.paymentNumber}</div>
-                    <div style={{ fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>{formatDate(pay.paymentDate)}{pay.reference ? ` · Ref: ${pay.reference}` : ''}</div>
-                  </div>
-                  <span className="pill pill-steel">{pay.paymentMethod}</span>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 14, fontWeight: 700, color: 'var(--green-ok)' }}>{formatCurrency(pay.amount)}</div>
-                  </div>
-                </div>
-              ))}
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Payment #</th>
+                    <th>Date</th>
+                    <th>Method</th>
+                    <th>Reference</th>
+                    <th>Notes</th>
+                    <th style={{ textAlign: 'right' }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(customer.customerPayments || []).map((pay) => (
+                    <tr key={pay.id}>
+                      <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600 }}>{pay.paymentNumber}</span></td>
+                      <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{formatDate(pay.paymentDate)}</span></td>
+                      <td><span className="pill pill-steel">{pay.paymentMethod}</span></td>
+                      <td><span style={{ fontSize: 12, color: 'var(--steel)' }}>{pay.reference || '—'}</span></td>
+                      <td><span style={{ fontSize: 12, color: 'var(--steel)' }}>{pay.notes || '—'}</span></td>
+                      <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 13, fontWeight: 700, color: 'var(--green-ok)' }}>{formatCurrency(pay.amount)}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

@@ -31,4 +31,21 @@ export class SuppliersService {
     await this.findOne(id);
     return this.prisma.supplier.delete({ where: { id } });
   }
+
+  async getLedger(id: string) {
+    await this.findOne(id);
+    const purchases = await this.prisma.purchase.findMany({ where: { supplierId: id }, orderBy: { purchaseDate: 'asc' } });
+    const payments = await this.prisma.supplierPayment.findMany({ where: { supplierId: id }, orderBy: { paymentDate: 'asc' } });
+
+    const entries: any[] = [
+      ...purchases.map((p) => ({ date: p.purchaseDate, description: `Purchase ${p.purchaseNumber}`, transactionType: 'PURCHASE', debit: p.netAmount, credit: 0, ref: p.purchaseNumber })),
+      ...payments.map((p) => ({ date: p.paymentDate, description: `Payment ${p.paymentNumber}${p.reference ? ' · ' + p.reference : ''}`, transactionType: 'PAYMENT', debit: 0, credit: p.amount, ref: p.paymentNumber })),
+    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    let balance = 0;
+    return entries.map((e) => {
+      balance += e.debit - e.credit;
+      return { ...e, balance };
+    });
+  }
 }

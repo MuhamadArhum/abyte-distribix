@@ -257,28 +257,35 @@ export default function SupplierDetailPage() {
           {purchases.length === 0 ? (
             <div style={{ padding: 40, textAlign: 'center', color: 'var(--steel)', fontSize: 12, fontFamily: 'IBM Plex Mono,monospace' }}>No purchase records</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {purchases.map((p) => (
-                <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto', gap: 16, alignItems: 'center', padding: '11px 14px', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)' }}>
-                  <div>
-                    <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600 }}>{p.purchaseNumber}</div>
-                    <div style={{ fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>{formatDate(p.purchaseDate)} · {p.quantity} {p.unit}</div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 11, color: 'var(--steel)' }}>Total</div>
-                    <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 700 }}>{formatCurrency(p.netAmount)}</div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 11, color: 'var(--steel)' }}>Paid</div>
-                    <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, color: 'var(--green-ok)' }}>{formatCurrency(p.paidAmount)}</div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 11, color: 'var(--steel)' }}>Remaining</div>
-                    <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 700, color: p.remainingAmount > 0 ? 'var(--red-risk)' : 'var(--green-ok)' }}>{formatCurrency(p.remainingAmount)}</div>
-                  </div>
-                  <span className={`pill ${p.paymentStatus === 'PAID' ? 'pill-green' : p.paymentStatus === 'PARTIAL' ? 'pill-amber' : 'pill-red'}`}>{p.paymentStatus}</span>
-                </div>
-              ))}
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Purchase #</th>
+                    <th>Date</th>
+                    <th style={{ textAlign: 'right' }}>Qty</th>
+                    <th style={{ textAlign: 'right' }}>Rate</th>
+                    <th style={{ textAlign: 'right' }}>Total</th>
+                    <th style={{ textAlign: 'right' }}>Paid</th>
+                    <th style={{ textAlign: 'right' }}>Remaining</th>
+                    <th style={{ textAlign: 'center' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {purchases.map((p) => (
+                    <tr key={p.id}>
+                      <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600 }}>{p.purchaseNumber}</span></td>
+                      <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{formatDate(p.purchaseDate)}</span></td>
+                      <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{p.quantity} {p.unit}</span></td>
+                      <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{formatCurrency(p.purchaseRate)}</span></td>
+                      <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 700 }}>{formatCurrency(p.netAmount)}</span></td>
+                      <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, color: 'var(--green-ok)' }}>{formatCurrency(p.paidAmount)}</span></td>
+                      <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 700, color: p.remainingAmount > 0 ? 'var(--red-risk)' : 'var(--steel)' }}>{formatCurrency(p.remainingAmount)}</span></td>
+                      <td style={{ textAlign: 'center' }}><span className={`pill ${p.paymentStatus === 'PAID' ? 'pill-green' : p.paymentStatus === 'PARTIAL' ? 'pill-amber' : 'pill-red'}`}>{p.paymentStatus}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -290,17 +297,31 @@ export default function SupplierDetailPage() {
           {payments.length === 0 ? (
             <div style={{ padding: 40, textAlign: 'center', color: 'var(--steel)', fontSize: 12, fontFamily: 'IBM Plex Mono,monospace' }}>No payment records</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {payments.map((pay) => (
-                <div key={pay.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 16, alignItems: 'center', padding: '11px 14px', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)' }}>
-                  <div>
-                    <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600 }}>{pay.paymentNumber}</div>
-                    <div style={{ fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>{formatDate(pay.paymentDate)}{pay.reference ? ` · Ref: ${pay.reference}` : ''}</div>
-                  </div>
-                  <span className="pill pill-steel">{pay.paymentMethod}</span>
-                  <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono,monospace', fontSize: 14, fontWeight: 700, color: 'var(--blueprint)' }}>{formatCurrency(pay.amount)}</div>
-                </div>
-              ))}
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Payment #</th>
+                    <th>Date</th>
+                    <th>Method</th>
+                    <th>Reference</th>
+                    <th>Notes</th>
+                    <th style={{ textAlign: 'right' }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((pay) => (
+                    <tr key={pay.id}>
+                      <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600 }}>{pay.paymentNumber}</span></td>
+                      <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{formatDate(pay.paymentDate)}</span></td>
+                      <td><span className="pill pill-steel">{pay.paymentMethod}</span></td>
+                      <td><span style={{ fontSize: 12, color: 'var(--steel)' }}>{pay.reference || '—'}</span></td>
+                      <td><span style={{ fontSize: 12, color: 'var(--steel)' }}>{pay.notes || '—'}</span></td>
+                      <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 13, fontWeight: 700, color: 'var(--blueprint)' }}>{formatCurrency(pay.amount)}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
