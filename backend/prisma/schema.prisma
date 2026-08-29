@@ -1,0 +1,520 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ACCESS CONTROL
+// ============================================================
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  email        String   @unique
+  passwordHash String
+  fullName     String
+  role         String   @default("OPERATOR")
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  fillingBatches    FillingBatch[]
+  customerPayments  CustomerPayment[]
+  supplierPayments  SupplierPayment[]
+  expenses          Expense[]
+  sales             Sale[]
+  auditLogs         AuditLog[]
+  gasInventoryTxns  GasInventoryTransaction[]
+  cylinderTxns      CylinderTransaction[]
+  gasReceivings     GasReceiving[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+  permissions String  @default("[]") // JSON array of permission strings
+
+  @@map("roles")
+}
+
+// ============================================================
+// PARTIES
+// ============================================================
+
+model Customer {
+  id             String   @id @default(cuid())
+  customerCode   String   @unique
+  businessName   String
+  contactPerson  String?
+  phone          String
+  email          String?
+  address        String?
+  customerType   String   @default("RETAIL") // RETAIL, DEALER, COMMERCIAL, INDIVIDUAL
+  creditLimit    Float    @default(0)
+  openingBalance Float    @default(0)
+  currentBalance Float    @default(0)
+  paymentTerms   Int      @default(0) // days
+  status         String   @default("ACTIVE")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  sales                  Sale[]
+  customerPayments       CustomerPayment[]
+  customerCylinderBals   CustomerCylinderBalance[]
+  cylinderTransactions   CylinderTransaction[]
+  saleReturns            SaleReturn[]
+
+  @@map("customers")
+}
+
+model Supplier {
+  id             String   @id @default(cuid())
+  supplierCode   String   @unique
+  supplierName   String
+  contactPerson  String?
+  phone          String
+  email          String?
+  address        String?
+  taxNtn         String?
+  openingBalance Float    @default(0)
+  currentBalance Float    @default(0)
+  paymentTerms   Int      @default(0)
+  status         String   @default("ACTIVE")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  purchases        Purchase[]
+  gasReceivings    GasReceiving[]
+  supplierPayments SupplierPayment[]
+
+  @@map("suppliers")
+}
+
+// ============================================================
+// GAS PRODUCTS & TANKS
+// ============================================================
+
+model GasProduct {
+  id                   String  @id @default(cuid())
+  productCode          String  @unique
+  productName          String
+  gasType              String  // LPG, CNG, etc.
+  unit                 String  @default("KG")
+  defaultPurchaseRate  Float   @default(0)
+  defaultSellingRate   Float   @default(0)
+  minStockLevel        Float   @default(0)
+  status               String  @default("ACTIVE")
+
+  // Relations
+  storageTanks         StorageTank[]
+  purchases            Purchase[]
+  gasInventoryTxns     GasInventoryTransaction[]
+
+  @@map("gas_products")
+}
+
+model StorageTank {
+  id              String  @id @default(cuid())
+  tankNumber      String  @unique
+  tankName        String
+  gasProductId    String
+  capacity        Float
+  currentQuantity Float   @default(0)
+  location        String?
+  status          String  @default("ACTIVE")
+
+  // Relations
+  gasProduct       GasProduct              @relation(fields: [gasProductId], references: [id])
+  gasReceivings    GasReceiving[]
+  fillingBatches   FillingBatch[]
+  gasInventoryTxns GasInventoryTransaction[]
+
+  @@map("storage_tanks")
+}
+
+// ============================================================
+// PURCHASES
+// ============================================================
+
+model Purchase {
+  id                    String   @id @default(cuid())
+  purchaseNumber        String   @unique
+  supplierId            String
+  gasProductId          String
+  purchaseDate          DateTime
+  quantity              Float
+  unit                  String   @default("KG")
+  purchaseRate          Float
+  gasAmount             Float
+  transportation        Float    @default(0)
+  otherCharges          Float    @default(0)
+  discount              Float    @default(0)
+  grossAmount           Float
+  netAmount             Float
+  paidAmount            Float    @default(0)
+  remainingAmount       Float
+  paymentStatus         String   @default("UNPAID") // UNPAID, PARTIAL, PAID
+  supplierInvoiceNumber String?
+  notes                 String?
+  status                String   @default("ACTIVE")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relations
+  supplier         Supplier       @relation(fields: [supplierId], references: [id])
+  gasProduct       GasProduct     @relation(fields: [gasProductId], references: [id])
+  gasReceivings    GasReceiving[]
+  supplierPayments SupplierPayment[]
+
+  @@map("purchases")
+}
+
+model GasReceiving {
+  id               String   @id @default(cuid())
+  receivingNumber  String   @unique
+  purchaseId       String
+  supplierId       String
+  receivingDate    DateTime
+  expectedQuantity Float
+  receivedQuantity Float
+  variance         Float    @default(0)
+  unit             String   @default("KG")
+  tankId           String
+  receivedById     String?
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  // Relations
+  purchase   Purchase    @relation(fields: [purchaseId], references: [id])
+  supplier   Supplier    @relation(fields: [supplierId], references: [id])
+  tank       StorageTank @relation(fields: [tankId], references: [id])
+  receivedBy User?       @relation(fields: [receivedById], references: [id])
+
+  @@map("gas_receivings")
+}
+
+// ============================================================
+// INVENTORY
+// ============================================================
+
+model GasInventoryTransaction {
+  id              String   @id @default(cuid())
+  transactionType String   // PURCHASE, RECEIVING, FILLING, ADJUSTMENT, LOSS
+  referenceId     String?
+  referenceType   String?
+  tankId          String
+  gasProductId    String
+  quantity        Float
+  previousStock   Float
+  newStock        Float
+  notes           String?
+  createdAt       DateTime @default(now())
+  createdById     String?
+
+  // Relations
+  tank       StorageTank @relation(fields: [tankId], references: [id])
+  gasProduct GasProduct  @relation(fields: [gasProductId], references: [id])
+  createdBy  User?       @relation(fields: [createdById], references: [id])
+
+  @@map("gas_inventory_transactions")
+}
+
+// ============================================================
+// CYLINDERS
+// ============================================================
+
+model CylinderType {
+  id            String  @id @default(cuid())
+  cylinderSize  String  // e.g., "11.8 KG", "45 KG"
+  gasCapacity   Float
+  emptyWeight   Float
+  depositAmount Float   @default(0)
+  status        String  @default("ACTIVE")
+  sellingPrices String  @default("[]") // JSON array of {priceType, price}
+
+  // Relations
+  cylinderInventory      CylinderInventory[]
+  cylinderTransactions   CylinderTransaction[]
+  fillingBatches         FillingBatch[]
+  saleItems              SaleItem[]
+  customerCylinderBals   CustomerCylinderBalance[]
+
+  @@map("cylinder_types")
+}
+
+model CylinderInventory {
+  id             String   @id @default(cuid())
+  cylinderTypeId String
+  status         String   // FILLED, EMPTY, WITH_CUSTOMER, DAMAGED, MAINTENANCE, LOST
+  quantity       Int      @default(0)
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  cylinderType CylinderType @relation(fields: [cylinderTypeId], references: [id])
+
+  @@unique([cylinderTypeId, status])
+  @@map("cylinder_inventory")
+}
+
+model CylinderTransaction {
+  id              String   @id @default(cuid())
+  transactionType String
+  referenceId     String?
+  cylinderTypeId  String
+  quantity        Int
+  fromStatus      String?
+  toStatus        String?
+  customerId      String?
+  notes           String?
+  createdAt       DateTime @default(now())
+  createdById     String?
+
+  // Relations
+  cylinderType CylinderType @relation(fields: [cylinderTypeId], references: [id])
+  customer     Customer?    @relation(fields: [customerId], references: [id])
+  createdBy    User?        @relation(fields: [createdById], references: [id])
+
+  @@map("cylinder_transactions")
+}
+
+model FillingBatch {
+  id                String   @id @default(cuid())
+  batchNumber       String   @unique
+  fillingDate       DateTime
+  tankId            String
+  cylinderTypeId    String
+  numberOfCylinders Int
+  expectedGasQty    Float
+  actualGasQty      Float    @default(0)
+  gasVariance       Float    @default(0)
+  operatorId        String?
+  fillingStation    String?
+  status            String   @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, CANCELLED
+  notes             String?
+  createdAt         DateTime @default(now())
+
+  // Relations
+  tank         StorageTank  @relation(fields: [tankId], references: [id])
+  cylinderType CylinderType @relation(fields: [cylinderTypeId], references: [id])
+  operator     User?        @relation(fields: [operatorId], references: [id])
+
+  @@map("filling_batches")
+}
+
+// ============================================================
+// SALES
+// ============================================================
+
+model Sale {
+  id             String   @id @default(cuid())
+  invoiceNumber  String   @unique
+  customerId     String
+  saleDate       DateTime
+  subtotal       Float
+  discount       Float    @default(0)
+  netTotal       Float
+  paidAmount     Float    @default(0)
+  remainingAmount Float   @default(0)
+  paymentMethod  String   @default("CASH") // CASH, CREDIT, BANK, CHEQUE, ONLINE
+  paymentStatus  String   @default("UNPAID") // UNPAID, PARTIAL, PAID
+  notes          String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  customer     Customer      @relation(fields: [customerId], references: [id])
+  createdBy    User?         @relation(fields: [createdById], references: [id])
+  saleItems    SaleItem[]
+  saleReturns  SaleReturn[]
+  payments     CustomerPayment[]
+
+  @@map("sales")
+}
+
+model SaleItem {
+  id             String @id @default(cuid())
+  saleId         String
+  cylinderTypeId String
+  quantity       Int
+  unitPrice      Float
+  discount       Float  @default(0)
+  totalPrice     Float
+
+  // Relations
+  sale         Sale         @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  cylinderType CylinderType @relation(fields: [cylinderTypeId], references: [id])
+
+  @@map("sale_items")
+}
+
+model SaleReturn {
+  id           String   @id @default(cuid())
+  returnNumber String   @unique
+  saleId       String
+  customerId   String
+  returnDate   DateTime
+  reason       String?
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  // Relations
+  sale     Sale     @relation(fields: [saleId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@map("sale_returns")
+}
+
+model CustomerCylinderBalance {
+  id             String   @id @default(cuid())
+  customerId     String
+  cylinderTypeId String
+  filledQty      Int      @default(0)
+  emptyQty       Int      @default(0)
+  totalQty       Int      @default(0)
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  customer     Customer     @relation(fields: [customerId], references: [id])
+  cylinderType CylinderType @relation(fields: [cylinderTypeId], references: [id])
+
+  @@unique([customerId, cylinderTypeId])
+  @@map("customer_cylinder_balances")
+}
+
+// ============================================================
+// FINANCE
+// ============================================================
+
+model CustomerPayment {
+  id            String   @id @default(cuid())
+  paymentNumber String   @unique
+  customerId    String
+  saleId        String?
+  paymentDate   DateTime
+  amount        Float
+  paymentMethod String   @default("CASH")
+  reference     String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  createdById   String?
+
+  // Relations
+  customer  Customer @relation(fields: [customerId], references: [id])
+  sale      Sale?    @relation(fields: [saleId], references: [id])
+  createdBy User?    @relation(fields: [createdById], references: [id])
+
+  @@map("customer_payments")
+}
+
+model SupplierPayment {
+  id            String   @id @default(cuid())
+  paymentNumber String   @unique
+  supplierId    String
+  purchaseId    String?
+  paymentDate   DateTime
+  amount        Float
+  paymentMethod String   @default("CASH")
+  reference     String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  createdById   String?
+
+  // Relations
+  supplier  Supplier  @relation(fields: [supplierId], references: [id])
+  purchase  Purchase? @relation(fields: [purchaseId], references: [id])
+  createdBy User?     @relation(fields: [createdById], references: [id])
+
+  @@map("supplier_payments")
+}
+
+model Expense {
+  id            String   @id @default(cuid())
+  expenseNumber String   @unique
+  category      String   // TRANSPORTATION, FUEL, SALARIES, ELECTRICITY, RENT, MAINTENANCE, LOADING_UNLOADING, CYLINDER_REPAIR, OFFICE, OTHER
+  expenseDate   DateTime
+  amount        Float
+  paymentMethod String   @default("CASH")
+  description   String?
+  attachment    String?
+  createdAt     DateTime @default(now())
+  createdById   String?
+
+  // Relations
+  createdBy User? @relation(fields: [createdById], references: [id])
+
+  @@map("expenses")
+}
+
+model CashTransaction {
+  id              String   @id @default(cuid())
+  transactionType String
+  referenceId     String?
+  referenceType   String?
+  amount          Float
+  direction       String   // IN, OUT
+  balance         Float
+  description     String?
+  createdAt       DateTime @default(now())
+
+  @@map("cash_transactions")
+}
+
+model BankTransaction {
+  id              String   @id @default(cuid())
+  transactionType String
+  referenceId     String?
+  referenceType   String?
+  amount          Float
+  direction       String   // IN, OUT
+  balance         Float
+  bankName        String?
+  accountNumber   String?
+  description     String?
+  createdAt       DateTime @default(now())
+
+  @@map("bank_transactions")
+}
+
+// ============================================================
+// SYSTEM
+// ============================================================
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  userId        String?
+  action        String
+  module        String
+  recordId      String?
+  previousValue String?  // JSON
+  newValue      String?  // JSON
+  ipAddress     String?
+  createdAt     DateTime @default(now())
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model Setting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("settings")
+}
