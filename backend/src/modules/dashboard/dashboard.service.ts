@@ -55,6 +55,32 @@ export class DashboardService {
     };
   }
 
+  async getRecentSales() {
+    return this.prisma.sale.findMany({
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      include: { customer: { select: { businessName: true } } },
+    });
+  }
+
+  async getPendingPurchases() {
+    return this.prisma.purchase.findMany({
+      take: 5,
+      where: { paymentStatus: { not: 'PAID' } },
+      orderBy: { purchaseDate: 'desc' },
+      include: { supplier: { select: { supplierName: true } } },
+    });
+  }
+
+  async getTopDebtors() {
+    return this.prisma.customer.findMany({
+      take: 5,
+      where: { currentBalance: { gt: 0 } },
+      orderBy: { currentBalance: 'desc' },
+      select: { id: true, businessName: true, customerType: true, currentBalance: true, creditLimit: true },
+    });
+  }
+
   async getSalesChart() {
     const last7Days = Array.from({ length: 7 }, (_, i) => {
       const d = new Date();

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { dashboardApi, salesApi, purchasesApi, customersApi, cylindersApi, storageTanksApi } from '@/lib/api';
+import { dashboardApi, cylindersApi, storageTanksApi } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import type { Sale, Purchase, Customer, CylinderType, StorageTank } from '@/types';
 
@@ -60,9 +60,9 @@ export default function DashboardPage() {
     Promise.allSettled([
       dashboardApi.getStats(),
       dashboardApi.getSalesChart(),
-      salesApi.getAll(),
-      purchasesApi.getAll(),
-      customersApi.getAll(),
+      dashboardApi.getRecentSales(),
+      dashboardApi.getPendingPurchases(),
+      dashboardApi.getTopDebtors(),
       cylindersApi.getAll(),
       storageTanksApi.getAll(),
     ]).then(([s, chart, sales, purch, cust, cyl, tank]) => {
@@ -71,27 +71,13 @@ export default function DashboardPage() {
       if (chart.status === 'fulfilled') {
         const raw = chart.value.data;
         if (Array.isArray(raw)) {
-          setChartData(raw.map((d: any) => ({ label: d.label || d.date || '', value: d.value || d.total || d.netTotal || 0 })));
+          setChartData(raw.map((d: any) => ({ label: d.label || d.date || '', value: d.value || d.total || d.netTotal || d.amount || 0 })));
         }
       }
 
-      if (sales.status === 'fulfilled') {
-        const all: Sale[] = sales.value.data;
-        const sorted = [...all].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setRecentSales(sorted.slice(0, 5));
-      }
-
-      if (purch.status === 'fulfilled') {
-        const all: Purchase[] = purch.value.data;
-        setPendingPurchases(all.filter((p) => p.paymentStatus !== 'PAID').slice(0, 5));
-      }
-
-      if (cust.status === 'fulfilled') {
-        const all: Customer[] = cust.value.data;
-        const sorted = [...all].filter((c) => c.currentBalance > 0).sort((a, b) => b.currentBalance - a.currentBalance);
-        setTopDebtors(sorted.slice(0, 5));
-      }
-
+      if (sales.status === 'fulfilled') setRecentSales(sales.value.data);
+      if (purch.status === 'fulfilled') setPendingPurchases(purch.value.data);
+      if (cust.status === 'fulfilled') setTopDebtors(cust.value.data);
       if (cyl.status === 'fulfilled') setCylinders(cyl.value.data);
       if (tank.status === 'fulfilled') setTanks(tank.value.data);
     }).finally(() => setLoading(false));

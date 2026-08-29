@@ -150,6 +150,9 @@ export const reportsApi = {
 export const dashboardApi = {
   getStats: () => api.get('/dashboard/stats'),
   getSalesChart: () => api.get('/dashboard/sales-chart'),
+  getRecentSales: () => api.get('/dashboard/recent-sales'),
+  getPendingPurchases: () => api.get('/dashboard/pending-purchases'),
+  getTopDebtors: () => api.get('/dashboard/top-debtors'),
 };
 
 export const usersApi = {
