@@ -7,7 +7,7 @@ async function bootstrap() {
   app.enableCors({ origin: '*' });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.setGlobalPrefix('api');
-  await app.listen(3001);
-  console.log('AbyteDistribix backend running on http://localhost:3001');
+  await app.listen(3003);
+  console.log('AbyteDistribix backend running on http://localhost:3003');
 }
 bootstrap();

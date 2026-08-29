@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:3001/api',
+  baseURL: 'http://localhost:3003/api',
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -172,5 +172,5 @@ export const backupApi = {
   create: () => api.post('/backup/create'),
   restore: (filename: string) => api.post(`/backup/restore/${filename}`),
   delete: (filename: string) => api.delete(`/backup/${filename}`),
-  downloadUrl: (filename: string) => `http://localhost:3001/api/backup/download/${encodeURIComponent(filename)}`,
+  downloadUrl: (filename: string) => `http://localhost:3003/api/backup/download/${encodeURIComponent(filename)}`,
 };
