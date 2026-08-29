@@ -2,6 +2,8 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { purchasesApi } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { usePagination } from '@/hooks/usePagination';
+import Pagination from '@/components/shared/Pagination';
 import type { Purchase } from '@/types';
 
 const today = new Date().toISOString().split('T')[0];
@@ -58,6 +60,8 @@ export default function PurchasesPage() {
   const unpaidCount = purchases.filter((p) => p.paymentStatus !== 'PAID').length;
 
   const filtersActive = search || filterStatus !== 'ALL' || filterProduct !== 'ALL' || startDate !== today || endDate !== today;
+
+  const { paged, page, pageSize, setPage, setPageSize } = usePagination(filtered);
 
   return (
     <div className="page-content">
@@ -150,7 +154,7 @@ export default function PurchasesPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p) => (
+              {paged.map((p) => (
                 <tr key={p.id}>
                   <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600 }}>{p.purchaseNumber}</span></td>
                   <td><span className="row-title">{p.supplier?.supplierName || '—'}</span></td>
@@ -175,6 +179,9 @@ export default function PurchasesPage() {
               ))}
             </tbody>
           </table>
+        )}
+        {!loading && filtered.length > 0 && (
+          <Pagination total={filtered.length} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
         )}
       </div>
     </div>

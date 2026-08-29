@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { paymentsApi, suppliersApi, purchasesApi } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { usePagination } from '@/hooks/usePagination';
+import Pagination from '@/components/shared/Pagination';
 import type { SupplierPayment, Supplier, Purchase } from '@/types';
 
 const METHODS = ['CASH', 'BANK', 'CHEQUE'];
@@ -64,6 +66,8 @@ export default function SupplierPaymentsPage() {
   const allTotal = payments.reduce((s, p) => s + p.amount, 0);
   const filteredTotal = filtered.reduce((s, p) => s + p.amount, 0);
   const filtersActive = search || filterMethod !== 'ALL' || startDate !== today || endDate !== today;
+
+  const { paged, page, pageSize, setPage, setPageSize } = usePagination(filtered);
 
   return (
     <div className="page-content">
@@ -142,7 +146,7 @@ export default function SupplierPaymentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((p) => (
+                {paged.map((p) => (
                   <tr key={p.id}>
                     <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600 }}>{p.paymentNumber}</span></td>
                     <td><span className="row-title">{p.supplier?.supplierName || '—'}</span></td>
@@ -156,6 +160,9 @@ export default function SupplierPaymentsPage() {
               </tbody>
             </table>
           </div>
+        )}
+        {!loading && filtered.length > 0 && (
+          <Pagination total={filtered.length} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
         )}
       </div>
 

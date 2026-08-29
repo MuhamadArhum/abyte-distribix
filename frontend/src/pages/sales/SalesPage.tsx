@@ -2,6 +2,8 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { salesApi } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { usePagination } from '@/hooks/usePagination';
+import Pagination from '@/components/shared/Pagination';
 import type { Sale } from '@/types';
 
 const today = new Date().toISOString().split('T')[0];
@@ -56,6 +58,8 @@ export default function SalesPage() {
   const unpaidCount = sales.filter((s) => s.paymentStatus !== 'PAID').length;
 
   const filtersActive = search || filterStatus !== 'ALL' || filterMethod !== 'ALL' || startDate !== today || endDate !== today;
+
+  const { paged, page, pageSize, setPage, setPageSize } = usePagination(filtered);
 
   const methods = [...new Set(sales.map((s) => s.paymentMethod).filter(Boolean))];
 
@@ -149,7 +153,7 @@ export default function SalesPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((s) => (
+              {paged.map((s) => (
                 <tr key={s.id}>
                   <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600 }}>{s.invoiceNumber}</span></td>
                   <td><span className="row-title">{s.customer?.businessName || '—'}</span></td>
@@ -173,6 +177,9 @@ export default function SalesPage() {
               ))}
             </tbody>
           </table>
+        )}
+        {!loading && filtered.length > 0 && (
+          <Pagination total={filtered.length} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
         )}
       </div>
     </div>

@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { gasReceivingApi, purchasesApi, suppliersApi, storageTanksApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
+import { usePagination } from '@/hooks/usePagination';
+import Pagination from '@/components/shared/Pagination';
 import type { GasReceiving, Purchase, Supplier, StorageTank } from '@/types';
 
 const today = new Date().toISOString().split('T')[0];
@@ -63,6 +65,8 @@ export default function GasReceivingPage() {
   const totalReceived = receivings.reduce((s, r) => s + r.receivedQuantity, 0);
   const totalVariance = receivings.reduce((s, r) => s + (r.variance || 0), 0);
   const filtersActive = search || startDate !== today || endDate !== today;
+
+  const { paged, page, pageSize, setPage, setPageSize } = usePagination(filtered);
 
   return (
     <div className="page-content">
@@ -137,7 +141,7 @@ export default function GasReceivingPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((r) => {
+                {paged.map((r) => {
                   const v = r.variance || 0;
                   return (
                     <tr key={r.id}>
@@ -154,6 +158,9 @@ export default function GasReceivingPage() {
               </tbody>
             </table>
           </div>
+        )}
+        {!loading && filtered.length > 0 && (
+          <Pagination total={filtered.length} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
         )}
       </div>
 

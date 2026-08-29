@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { expensesApi } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { usePagination } from '@/hooks/usePagination';
+import Pagination from '@/components/shared/Pagination';
 import type { Expense } from '@/types';
 
 const CATEGORIES = ['TRANSPORTATION','FUEL','SALARIES','ELECTRICITY','RENT','MAINTENANCE','LOADING_UNLOADING','CYLINDER_REPAIR','OFFICE','OTHER'];
@@ -73,6 +75,8 @@ export default function ExpensesPage() {
   }, [expenses, search, filterCategory, filterMethod, startDate, endDate]);
 
   const filtersActive = search || filterCategory !== 'ALL' || filterMethod !== 'ALL' || startDate !== today || endDate !== today;
+
+  const { paged, page, pageSize, setPage, setPageSize } = usePagination(filtered);
 
   return (
     <div className="page-content">
@@ -154,7 +158,7 @@ export default function ExpensesPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((e) => (
+              {paged.map((e) => (
                 <tr key={e.id}>
                   <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{e.expenseNumber}</span></td>
                   <td><span className="pill pill-steel">{e.category.replace(/_/g, ' ')}</span></td>
@@ -176,6 +180,9 @@ export default function ExpensesPage() {
               ))}
             </tbody>
           </table>
+        )}
+        {!loading && filtered.length > 0 && (
+          <Pagination total={filtered.length} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
         )}
       </div>
 

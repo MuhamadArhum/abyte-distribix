@@ -2,6 +2,8 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fillingApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
+import { usePagination } from '@/hooks/usePagination';
+import Pagination from '@/components/shared/Pagination';
 import type { FillingBatch } from '@/types';
 
 const today = new Date().toISOString().split('T')[0];
@@ -58,6 +60,8 @@ export default function FillingPage() {
   const inProgressCount = batches.filter((b) => b.status === 'IN_PROGRESS' || b.status === 'PENDING').length;
 
   const filtersActive = search || filterStatus !== 'ALL' || filterCylinder !== 'ALL' || startDate !== today || endDate !== today;
+
+  const { paged, page, pageSize, setPage, setPageSize } = usePagination(filtered);
 
   return (
     <div className="page-content">
@@ -144,7 +148,7 @@ export default function FillingPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((b) => {
+              {paged.map((b) => {
                 const variance = b.actualGasQty > 0 ? b.actualGasQty - b.expectedGasQty : null;
                 return (
                   <tr key={b.id}>
@@ -175,6 +179,9 @@ export default function FillingPage() {
               })}
             </tbody>
           </table>
+        )}
+        {!loading && filtered.length > 0 && (
+          <Pagination total={filtered.length} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
         )}
       </div>
     </div>
