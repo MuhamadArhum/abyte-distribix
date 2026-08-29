@@ -165,3 +165,12 @@ export const settingsApi = {
   upsert: (data: any) => api.post('/settings', data),
   bulkUpsert: (settings: any[]) => api.post('/settings/bulk', { settings }),
 };
+
+export const backupApi = {
+  info: () => api.get('/backup/info'),
+  list: () => api.get('/backup/list'),
+  create: () => api.post('/backup/create'),
+  restore: (filename: string) => api.post(`/backup/restore/${filename}`),
+  delete: (filename: string) => api.delete(`/backup/${filename}`),
+  downloadUrl: (filename: string) => `http://localhost:3001/api/backup/download/${encodeURIComponent(filename)}`,
+};

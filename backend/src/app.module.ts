@@ -19,6 +19,7 @@ import { AccountingModule } from './modules/accounting/accounting.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
+import { BackupModule } from './modules/backup/backup.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -44,6 +45,7 @@ import { PrismaModule } from './prisma/prisma.module';
     ReportsModule,
     SettingsModule,
     AuditLogsModule,
+    BackupModule,
   ],
 })
 export class AppModule {}
