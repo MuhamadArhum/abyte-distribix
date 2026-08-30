@@ -327,7 +327,7 @@
 .data-table thead th {
   text-align: left;
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 10.5px; letter-spacing: 0.07em; font-weight: 700;
+  font-size: 11px; letter-spacing: 0.08em; font-weight: 800;
   color: var(--paper-light); text-transform: uppercase;
   padding: 11px 18px;
   border-bottom: 2px solid var(--blueprint-light);
