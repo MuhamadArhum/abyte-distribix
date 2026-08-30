@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { inventoryApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
+import { usePagination } from '@/hooks/usePagination';
+import Pagination from '@/components/shared/Pagination';
 import type { StorageTank } from '@/types';
 
 export default function InventoryPage() {
@@ -15,6 +17,8 @@ export default function InventoryPage() {
       .catch(() => alert('Failed to load inventory'))
       .finally(() => setLoading(false));
   }, []);
+
+  const { paged: txnPaged, page: txnPage, pageSize: txnPageSize, setPage: setTxnPage, setPageSize: setTxnPageSize } = usePagination(transactions);
 
   if (loading) return <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>Loading...</div>;
 
@@ -101,20 +105,23 @@ export default function InventoryPage() {
         {transactions.length === 0 ? (
           <div style={{ padding: 32, textAlign: 'center', color: 'var(--steel)', fontSize: 12 }}>No transactions yet</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {transactions.slice(0, 20).map((txn) => (
-              <div key={txn.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)' }}>
-                <div>
-                  {txnPill(txn.transactionType)}
-                  <div style={{ fontSize: 12, color: 'var(--steel)', marginTop: 4, fontFamily: 'IBM Plex Mono,monospace' }}>{txn.tank?.tankName} · {formatDate(txn.createdAt)}</div>
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {txnPaged.map((txn) => (
+                <div key={txn.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)' }}>
+                  <div>
+                    {txnPill(txn.transactionType)}
+                    <div style={{ fontSize: 12, color: 'var(--steel)', marginTop: 4, fontFamily: 'IBM Plex Mono,monospace' }}>{txn.tank?.tankName} · {formatDate(txn.createdAt)}</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontWeight: 600, fontSize: 13 }}>{txn.quantity} KG</div>
+                    <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)' }}>{txn.previousStock} → {txn.newStock}</div>
+                  </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontWeight: 600, fontSize: 13 }}>{txn.quantity} KG</div>
-                  <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)' }}>{txn.previousStock} → {txn.newStock}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+            <Pagination total={transactions.length} page={txnPage} pageSize={txnPageSize} onPageChange={setTxnPage} onPageSizeChange={setTxnPageSize} />
+          </>
         )}
       </div>
     </div>

@@ -4,6 +4,7 @@ import {
   getSortedRowModel, getFilteredRowModel, flexRender,
   type ColumnDef, type SortingState, type ColumnFiltersState,
 } from '@tanstack/react-table';
+import Pagination from './Pagination';
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -93,38 +94,13 @@ export function DataTable<TData, TValue>({
         </table>
       </div>
 
-      {/* Pagination */}
-      <div style={{
-        display: 'flex', flexWrap: 'wrap', alignItems: 'center',
-        justifyContent: 'space-between', gap: 8,
-        padding: '10px 18px', borderTop: '1px solid var(--rule)',
-      }}>
-        <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 11, color: 'var(--steel)' }}>
-          {table.getFilteredRowModel().rows.length} records · page {table.getState().pagination.pageIndex + 1} of {Math.max(1, table.getPageCount())}
-        </span>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {[
-            { label: '«', fn: () => table.setPageIndex(0), dis: !table.getCanPreviousPage() },
-            { label: '‹', fn: () => table.previousPage(), dis: !table.getCanPreviousPage() },
-            { label: '›', fn: () => table.nextPage(), dis: !table.getCanNextPage() },
-            { label: '»', fn: () => table.setPageIndex(table.getPageCount() - 1), dis: !table.getCanNextPage() },
-          ].map((b) => (
-            <button
-              key={b.label}
-              onClick={b.fn}
-              disabled={b.dis}
-              style={{
-                width: 28, height: 28, border: '1px solid var(--rule)',
-                background: 'var(--paper-light)', borderRadius: 'var(--radius)',
-                cursor: b.dis ? 'not-allowed' : 'pointer',
-                opacity: b.dis ? 0.4 : 1,
-                fontFamily: 'IBM Plex Mono, monospace', fontSize: 13,
-                color: 'var(--blueprint)',
-              }}
-            >{b.label}</button>
-          ))}
-        </div>
-      </div>
+      <Pagination
+        total={table.getFilteredRowModel().rows.length}
+        page={table.getState().pagination.pageIndex + 1}
+        pageSize={table.getState().pagination.pageSize}
+        onPageChange={(p) => table.setPageIndex(p - 1)}
+        onPageSizeChange={(size) => { table.setPageSize(size); table.setPageIndex(0); }}
+      />
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { gasProductsApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+import { usePagination } from '@/hooks/usePagination';
+import Pagination from '@/components/shared/Pagination';
 import type { GasProduct } from '@/types';
 
 const EMPTY = { productCode: '', productName: '', gasType: 'LPG', unit: 'KG', defaultPurchaseRate: 0, defaultSellingRate: 0, minStockLevel: 0 };
@@ -68,6 +70,8 @@ export default function GasProductsPage() {
   }, [products, search, filterType, filterStatus]);
 
   const filtersActive = search || filterType !== 'ALL' || filterStatus !== 'ALL';
+
+  const { paged, page, pageSize, setPage, setPageSize } = usePagination(filtered);
 
   return (
     <div className="page-content">
@@ -148,7 +152,7 @@ export default function GasProductsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p) => (
+              {paged.map((p) => (
                 <tr key={p.id}>
                   <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{p.productCode}</span></td>
                   <td><span className="row-title">{p.productName}</span></td>
@@ -175,6 +179,9 @@ export default function GasProductsPage() {
               ))}
             </tbody>
           </table>
+        )}
+        {!loading && filtered.length > 0 && (
+          <Pagination total={filtered.length} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
         )}
       </div>
 

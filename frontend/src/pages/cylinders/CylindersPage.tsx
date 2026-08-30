@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { cylindersApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+import { usePagination } from '@/hooks/usePagination';
+import Pagination from '@/components/shared/Pagination';
 import type { CylinderType } from '@/types';
 
 const EMPTY = { cylinderSize: '', gasCapacity: 0, emptyWeight: 0, depositAmount: 0 };
@@ -65,6 +67,8 @@ export default function CylindersPage() {
   }, [cylinders, search, filterStatus]);
 
   const filtersActive = search || filterStatus !== 'ALL';
+
+  const { paged, page, pageSize, setPage, setPageSize } = usePagination(filtered);
 
   return (
     <div className="page-content">
@@ -140,7 +144,7 @@ export default function CylindersPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((c) => {
+              {paged.map((c) => {
                 const filled = getInv(c, 'FILLED');
                 const empty = getInv(c, 'EMPTY');
                 return (
@@ -170,6 +174,9 @@ export default function CylindersPage() {
               })}
             </tbody>
           </table>
+        )}
+        {!loading && filtered.length > 0 && (
+          <Pagination total={filtered.length} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
         )}
       </div>
 
