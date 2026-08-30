@@ -322,16 +322,16 @@
 /* ---- Data table ---- */
 .data-table { width: 100%; border-collapse: collapse; }
 .data-table thead {
-  background: var(--paper-light);
+  background: var(--blueprint);
 }
 .data-table thead th {
   text-align: left;
   font-family: 'IBM Plex Mono', monospace;
   font-size: 10.5px; letter-spacing: 0.07em; font-weight: 700;
-  color: var(--ink); text-transform: uppercase;
+  color: var(--paper-light); text-transform: uppercase;
   padding: 11px 18px;
-  border-bottom: 2px solid var(--rule);
-  border-top: 1px solid var(--rule);
+  border-bottom: 2px solid var(--blueprint-light);
+  border-top: none;
   white-space: nowrap;
   user-select: none;
 }
