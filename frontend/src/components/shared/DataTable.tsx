@@ -16,7 +16,7 @@ interface DataTableProps<TData, TValue> {
 }
 
 export function DataTable<TData, TValue>({
-  columns, data, searchKey, searchPlaceholder = 'Search...', pageSize = 12, hideSearch = false,
+  columns, data, searchKey, searchPlaceholder = 'Search...', pageSize = 20, hideSearch = false,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
