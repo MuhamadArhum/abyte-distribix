@@ -145,6 +145,43 @@ export const reportsApi = {
   getReceivables: () => api.get('/reports/receivables'),
   getPayables: () => api.get('/reports/payables'),
   getInventory: () => api.get('/reports/inventory'),
+  getProfitLoss: (params?: any) => api.get('/reports/profit-loss', { params }),
+  getCylinderMovement: (params?: any) => api.get('/reports/cylinder-movement', { params }),
+  getSalesByUser: (params?: any) => api.get('/reports/sales-by-user', { params }),
+  getSalesReturns: (params?: any) => api.get('/reports/sales-returns', { params }),
+};
+
+export const driversApi = {
+  getAll: () => api.get('/drivers'),
+  getOne: (id: string) => api.get(`/drivers/${id}`),
+  create: (data: any) => api.post('/drivers', data),
+  update: (id: string, data: any) => api.patch(`/drivers/${id}`, data),
+  delete: (id: string) => api.delete(`/drivers/${id}`),
+};
+
+export const vehiclesApi = {
+  getAll: () => api.get('/vehicles'),
+  getOne: (id: string) => api.get(`/vehicles/${id}`),
+  create: (data: any) => api.post('/vehicles', data),
+  update: (id: string, data: any) => api.patch(`/vehicles/${id}`, data),
+  delete: (id: string) => api.delete(`/vehicles/${id}`),
+};
+
+export const deliveriesApi = {
+  getAll: () => api.get('/deliveries'),
+  getOne: (id: string) => api.get(`/deliveries/${id}`),
+  create: (data: any) => api.post('/deliveries', data),
+  update: (id: string, data: any) => api.patch(`/deliveries/${id}`, data),
+  delete: (id: string) => api.delete(`/deliveries/${id}`),
+};
+
+export const cylinderUnitsApi = {
+  getAll: (params?: { status?: string; cylinderTypeId?: string }) => api.get('/cylinder-units', { params }),
+  getOne: (id: string) => api.get(`/cylinder-units/${id}`),
+  getBySerial: (serial: string) => api.get(`/cylinder-units/by-serial/${serial}`),
+  create: (data: any) => api.post('/cylinder-units', data),
+  update: (id: string, data: any) => api.patch(`/cylinder-units/${id}`, data),
+  delete: (id: string) => api.delete(`/cylinder-units/${id}`),
 };
 
 export const dashboardApi = {

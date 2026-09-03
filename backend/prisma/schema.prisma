@@ -73,6 +73,8 @@ model Customer {
   customerCylinderBals   CustomerCylinderBalance[]
   cylinderTransactions   CylinderTransaction[]
   saleReturns            SaleReturn[]
+  deliveries             Delivery[]
+  cylinderUnits          CylinderUnit[]
 
   @@map("customers")
 }
@@ -250,6 +252,7 @@ model CylinderType {
   fillingBatches         FillingBatch[]
   saleItems              SaleItem[]
   customerCylinderBals   CustomerCylinderBalance[]
+  cylinderUnits          CylinderUnit[]
 
   @@map("cylinder_types")
 }
@@ -517,4 +520,82 @@ model Setting {
   updatedAt   DateTime @updatedAt
 
   @@map("settings")
+}
+
+// ============================================================
+// DELIVERY MANAGEMENT
+// ============================================================
+
+model Driver {
+  id            String   @id @default(cuid())
+  driverCode    String   @unique
+  fullName      String
+  phone         String
+  licenseNumber String?
+  address       String?
+  status        String   @default("ACTIVE")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  deliveries Delivery[]
+
+  @@map("drivers")
+}
+
+model Vehicle {
+  id            String   @id @default(cuid())
+  vehicleCode   String   @unique
+  vehicleNumber String   @unique
+  vehicleType   String   @default("TRUCK")
+  capacity      Float    @default(0)
+  status        String   @default("ACTIVE")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  deliveries Delivery[]
+
+  @@map("vehicles")
+}
+
+model Delivery {
+  id             String   @id @default(cuid())
+  deliveryNumber String   @unique
+  customerId     String
+  saleId         String?
+  driverId       String?
+  vehicleId      String?
+  deliveryDate   DateTime
+  status         String   @default("PENDING")
+  address        String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id])
+  driver   Driver?  @relation(fields: [driverId], references: [id])
+  vehicle  Vehicle? @relation(fields: [vehicleId], references: [id])
+
+  @@map("deliveries")
+}
+
+// ============================================================
+// INDIVIDUAL CYLINDER TRACKING
+// ============================================================
+
+model CylinderUnit {
+  id             String    @id @default(cuid())
+  serialNumber   String    @unique
+  qrCode         String    @unique
+  cylinderTypeId String
+  status         String    @default("EMPTY")
+  customerId     String?
+  purchaseDate   DateTime?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  cylinderType CylinderType @relation(fields: [cylinderTypeId], references: [id])
+  customer     Customer?    @relation(fields: [customerId], references: [id])
+
+  @@map("cylinder_units")
 }

@@ -8,6 +8,10 @@ const REPORT_TYPES = [
   { id: 'receivables', label: 'Customer Receivables', description: 'Outstanding balances from customers', hasDateFilter: false },
   { id: 'payables', label: 'Supplier Payables', description: 'Outstanding amounts to suppliers', hasDateFilter: false },
   { id: 'inventory', label: 'Inventory Report', description: 'Current gas and cylinder stock', hasDateFilter: false },
+  { id: 'profit-loss', label: 'Profit & Loss', description: 'Revenue, costs, and net profit summary', hasDateFilter: true },
+  { id: 'cylinder-movement', label: 'Cylinder Movement', description: 'Filling batches and cylinder transactions', hasDateFilter: true },
+  { id: 'sales-by-user', label: 'Sales by User', description: 'Sales performance per user/staff', hasDateFilter: true },
+  { id: 'sales-returns', label: 'Sales Returns', description: 'Returned invoices and reasons', hasDateFilter: true },
 ];
 
 export default function ReportsPage() {
@@ -29,6 +33,10 @@ export default function ReportsPage() {
       else if (type === 'receivables') res = await reportsApi.getReceivables();
       else if (type === 'payables') res = await reportsApi.getPayables();
       else if (type === 'inventory') res = await reportsApi.getInventory();
+      else if (type === 'profit-loss') res = await reportsApi.getProfitLoss(params);
+      else if (type === 'cylinder-movement') res = await reportsApi.getCylinderMovement(params);
+      else if (type === 'sales-by-user') res = await reportsApi.getSalesByUser(params);
+      else if (type === 'sales-returns') res = await reportsApi.getSalesReturns(params);
       setData(res?.data);
     } catch { alert('Failed to generate report'); }
     finally { setLoading(false); }
@@ -164,6 +172,203 @@ export default function ReportsPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Profit & Loss */}
+          {selectedReport === 'profit-loss' && data && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Revenue */}
+              <div style={{ padding: 16, background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)' }}>
+                <div style={{ fontFamily: 'Oswald,sans-serif', fontSize: 13, fontWeight: 600, marginBottom: 10, letterSpacing: '0.04em' }}>REVENUE</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
+                  <span style={{ color: 'var(--steel)' }}>Total Revenue</span>
+                  <span style={{ fontFamily: 'IBM Plex Mono,monospace', fontWeight: 700 }}>{formatCurrency(data.totalRevenue ?? 0)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
+                  <span style={{ color: 'var(--steel)' }}>Invoice Count</span>
+                  <span style={{ fontFamily: 'IBM Plex Mono,monospace' }}>{data.invoiceCount ?? 0}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'var(--steel)' }}>Total Discount</span>
+                  <span style={{ fontFamily: 'IBM Plex Mono,monospace', color: 'var(--amber-warn)' }}>{formatCurrency(data.totalDiscount ?? 0)}</span>
+                </div>
+              </div>
+              {/* COGS */}
+              <div style={{ padding: 16, background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)' }}>
+                <div style={{ fontFamily: 'Oswald,sans-serif', fontSize: 13, fontWeight: 600, marginBottom: 10, letterSpacing: '0.04em' }}>COST OF GOODS SOLD</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'var(--steel)' }}>COGS</span>
+                  <span style={{ fontFamily: 'IBM Plex Mono,monospace', fontWeight: 700, color: 'var(--red-risk)' }}>{formatCurrency(data.cogs ?? 0)}</span>
+                </div>
+              </div>
+              {/* Gross Profit */}
+              <div style={{ padding: 16, background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
+                  <span style={{ fontWeight: 600 }}>Gross Profit</span>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontWeight: 700 }}>{formatCurrency(data.grossProfit ?? 0)}</div>
+                    <div style={{ fontSize: 11, color: 'var(--steel)' }}>{data.grossMargin ?? 0}% margin</div>
+                  </div>
+                </div>
+              </div>
+              {/* Expenses by Category */}
+              {data.expensesByCategory && (
+                <div style={{ padding: 16, background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)' }}>
+                  <div style={{ fontFamily: 'Oswald,sans-serif', fontSize: 13, fontWeight: 600, marginBottom: 10, letterSpacing: '0.04em' }}>EXPENSES BY CATEGORY</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--rule)' }}>
+                        <th style={{ textAlign: 'left', padding: '4px 0', color: 'var(--steel)', fontWeight: 600 }}>Category</th>
+                        <th style={{ textAlign: 'right', padding: '4px 0', color: 'var(--steel)', fontWeight: 600 }}>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(data.expensesByCategory).map(([cat, amt]: [string, any]) => (
+                        <tr key={cat} style={{ borderBottom: '1px solid var(--rule)' }}>
+                          <td style={{ padding: '6px 0' }}>{cat}</td>
+                          <td style={{ padding: '6px 0', textAlign: 'right', fontFamily: 'IBM Plex Mono,monospace' }}>{formatCurrency(amt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {/* Net Profit */}
+              <div style={{ padding: 16, background: (data.netProfit ?? 0) >= 0 ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', border: `1px solid ${(data.netProfit ?? 0) >= 0 ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`, borderRadius: 'var(--radius)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15 }}>
+                  <span style={{ fontWeight: 700 }}>Net Profit</span>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontWeight: 800, color: (data.netProfit ?? 0) >= 0 ? '#16a34a' : '#dc2626' }}>{formatCurrency(data.netProfit ?? 0)}</div>
+                    <div style={{ fontSize: 11, color: 'var(--steel)' }}>{data.netMargin ?? 0}% margin</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Cylinder Movement */}
+          {selectedReport === 'cylinder-movement' && data && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {data.fillingBatches && (
+                <div>
+                  <div style={{ fontFamily: 'Oswald,sans-serif', fontSize: 13, fontWeight: 600, marginBottom: 10, letterSpacing: '0.04em' }}>FILLING BATCHES</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: 'var(--blueprint)', color: 'var(--paper-light)' }}>
+                        <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700 }}>Batch #</th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700 }}>Date</th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700 }}>Cylinder Type</th>
+                        <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 700 }}>Cylinders</th>
+                        <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 700 }}>Gas (KG)</th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700 }}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.fillingBatches.map((b: any) => (
+                        <tr key={b.id} style={{ borderBottom: '1px solid var(--rule)' }}>
+                          <td style={{ padding: '8px 12px', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{b.batchNumber}</td>
+                          <td style={{ padding: '8px 12px' }}>{formatDate(b.fillingDate)}</td>
+                          <td style={{ padding: '8px 12px' }}>{b.cylinderType?.cylinderSize}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'IBM Plex Mono,monospace' }}>{b.numberOfCylinders}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'IBM Plex Mono,monospace' }}>{b.actualGasQty}</td>
+                          <td style={{ padding: '8px 12px' }}>{b.status}</td>
+                        </tr>
+                      ))}
+                      {data.fillingBatches.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', padding: 20, color: 'var(--steel)' }}>No filling batches found</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {data.cylinderTransactions && (
+                <div>
+                  <div style={{ fontFamily: 'Oswald,sans-serif', fontSize: 13, fontWeight: 600, marginBottom: 10, letterSpacing: '0.04em' }}>CYLINDER TRANSACTIONS</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: 'var(--blueprint)', color: 'var(--paper-light)' }}>
+                        <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700 }}>Date</th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700 }}>Type</th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700 }}>Cylinder</th>
+                        <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 700 }}>Qty</th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700 }}>Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.cylinderTransactions.map((t: any, idx: number) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid var(--rule)' }}>
+                          <td style={{ padding: '8px 12px' }}>{formatDate(t.date)}</td>
+                          <td style={{ padding: '8px 12px' }}>{t.type}</td>
+                          <td style={{ padding: '8px 12px' }}>{t.cylinderType?.cylinderSize || t.cylinderSize}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'IBM Plex Mono,monospace' }}>{t.quantity}</td>
+                          <td style={{ padding: '8px 12px', color: 'var(--steel)', fontSize: 12 }}>{t.notes || '—'}</td>
+                        </tr>
+                      ))}
+                      {data.cylinderTransactions.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', padding: 20, color: 'var(--steel)' }}>No transactions found</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Sales by User */}
+          {selectedReport === 'sales-by-user' && Array.isArray(data) && (
+            <div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: 'var(--blueprint)', color: 'var(--paper-light)' }}>
+                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700 }}>User</th>
+                    <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 700 }}>Sales Count</th>
+                    <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 700 }}>Total Amount</th>
+                    <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 700 }}>Total Collected</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.map((row: any, idx: number) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid var(--rule)' }}>
+                      <td style={{ padding: '8px 12px', fontWeight: 600 }}>{row.user?.fullName || row.username || '—'}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'IBM Plex Mono,monospace' }}>{row.salesCount ?? row.count ?? 0}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'IBM Plex Mono,monospace', fontWeight: 700 }}>{formatCurrency(row.totalAmount ?? 0)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'IBM Plex Mono,monospace' }}>{formatCurrency(row.totalCollected ?? 0)}</td>
+                    </tr>
+                  ))}
+                  {data.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', padding: 20, color: 'var(--steel)' }}>No data found</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Sales Returns */}
+          {selectedReport === 'sales-returns' && Array.isArray(data) && (
+            <div>
+              <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginBottom: 12 }}>
+                {data.length} return(s)
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: 'var(--blueprint)', color: 'var(--paper-light)' }}>
+                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700 }}>Return #</th>
+                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700 }}>Customer</th>
+                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700 }}>Original Invoice</th>
+                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700 }}>Date</th>
+                    <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 700 }}>Amount</th>
+                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700 }}>Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.map((r: any) => (
+                    <tr key={r.id} style={{ borderBottom: '1px solid var(--rule)' }}>
+                      <td style={{ padding: '8px 12px', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{r.returnNumber}</td>
+                      <td style={{ padding: '8px 12px' }}>{r.customer?.businessName || '—'}</td>
+                      <td style={{ padding: '8px 12px', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{r.sale?.invoiceNumber || r.invoiceNumber || '—'}</td>
+                      <td style={{ padding: '8px 12px' }}>{formatDate(r.returnDate || r.createdAt)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'IBM Plex Mono,monospace' }}>{formatCurrency(r.amount ?? 0)}</td>
+                      <td style={{ padding: '8px 12px', color: 'var(--steel)', fontSize: 12 }}>{r.reason || '—'}</td>
+                    </tr>
+                  ))}
+                  {data.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', padding: 20, color: 'var(--steel)' }}>No returns found</td></tr>}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

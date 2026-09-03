@@ -20,6 +20,10 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { BackupModule } from './modules/backup/backup.module';
+import { DriversModule } from './modules/drivers/drivers.module';
+import { VehiclesModule } from './modules/vehicles/vehicles.module';
+import { DeliveriesModule } from './modules/deliveries/deliveries.module';
+import { CylinderUnitsModule } from './modules/cylinder-units/cylinder-units.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -46,6 +50,10 @@ import { PrismaModule } from './prisma/prisma.module';
     SettingsModule,
     AuditLogsModule,
     BackupModule,
+    DriversModule,
+    VehiclesModule,
+    DeliveriesModule,
+    CylinderUnitsModule,
   ],
 })
 export class AppModule {}

@@ -46,6 +46,10 @@ const navGroups: NavGroup[] = [
         label: 'Cylinders', path: '/cylinders',
         icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><ellipse cx="12" cy="7" rx="5" ry="2"/><path d="M7 7v10c0 1.1 2.24 2 5 2s5-.9 5-2V7"/></svg>,
       },
+      {
+        label: 'Cylinder Units', path: '/cylinder-units',
+        icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>,
+      },
     ],
   },
   {
@@ -66,6 +70,23 @@ const navGroups: NavGroup[] = [
       {
         label: 'Inventory', path: '/inventory',
         icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
+      },
+    ],
+  },
+  {
+    title: 'Delivery',
+    items: [
+      {
+        label: 'Deliveries', path: '/deliveries',
+        icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>,
+      },
+      {
+        label: 'Drivers', path: '/drivers',
+        icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 0-8 8c0 5.4 7.05 12.5 8 13.5.95-1 8-8.1 8-13.5a8 8 0 0 0-8-8z"/></svg>,
+      },
+      {
+        label: 'Vehicles', path: '/vehicles',
+        icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v9a2 2 0 0 1-2 2h-2"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>,
       },
     ],
   },

@@ -29,6 +29,10 @@ const AccountingPage = lazy(() => import('@/pages/accounting/AccountingPage'));
 const ReportsPage = lazy(() => import('@/pages/reports/ReportsPage'));
 const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage'));
 const UsersPage = lazy(() => import('@/pages/users/UsersPage'));
+const DriversPage = lazy(() => import('@/pages/drivers/DriversPage'));
+const VehiclesPage = lazy(() => import('@/pages/vehicles/VehiclesPage'));
+const DeliveriesPage = lazy(() => import('@/pages/deliveries/DeliveriesPage'));
+const CylinderUnitsPage = lazy(() => import('@/pages/cylinder-units/CylinderUnitsPage'));
 
 function LoadingFallback() {
   return (
@@ -71,6 +75,10 @@ export default function App() {
             <Route path="reports" element={<ReportsPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="users" element={<UsersPage />} />
+            <Route path="drivers" element={<DriversPage />} />
+            <Route path="vehicles" element={<VehiclesPage />} />
+            <Route path="deliveries" element={<DeliveriesPage />} />
+            <Route path="cylinder-units" element={<CylinderUnitsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

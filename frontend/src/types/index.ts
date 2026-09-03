@@ -233,3 +233,59 @@ export interface DashboardStats {
 
 export type PaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID';
 export type CustomerType = 'RETAIL' | 'DEALER' | 'COMMERCIAL' | 'INDIVIDUAL';
+
+export interface Driver {
+  id: string;
+  driverCode: string;
+  fullName: string;
+  phone: string;
+  licenseNumber?: string;
+  address?: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Vehicle {
+  id: string;
+  vehicleCode: string;
+  vehicleNumber: string;
+  vehicleType: string;
+  capacity: number;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Delivery {
+  id: string;
+  deliveryNumber: string;
+  customerId: string;
+  customer?: Customer;
+  saleId?: string;
+  driverId?: string;
+  driver?: Driver;
+  vehicleId?: string;
+  vehicle?: Vehicle;
+  deliveryDate: string;
+  status: string;
+  address?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CylinderUnit {
+  id: string;
+  serialNumber: string;
+  qrCode: string;
+  cylinderTypeId: string;
+  cylinderType?: CylinderType;
+  status: string;
+  customerId?: string;
+  customer?: Customer;
+  purchaseDate?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
