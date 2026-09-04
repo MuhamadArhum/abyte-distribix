@@ -30,6 +30,20 @@ export class PaymentsService {
       where: { id: dto.customerId },
       data: { currentBalance: { decrement: dto.amount } },
     });
+    // Record in cash book
+    const lastTx = await this.prisma.cashTransaction.findFirst({ orderBy: { createdAt: 'desc' } });
+    const prevBalance = lastTx?.balance ?? 0;
+    await this.prisma.cashTransaction.create({
+      data: {
+        transactionType: 'CUSTOMER_PAYMENT',
+        referenceId: payment.id,
+        referenceType: 'CustomerPayment',
+        amount: dto.amount,
+        direction: 'IN',
+        balance: prevBalance + dto.amount,
+        description: `Payment from ${payment.customer?.businessName || dto.customerId} · ${payment.paymentNumber}`,
+      },
+    });
     return payment;
   }
 
@@ -56,6 +70,20 @@ export class PaymentsService {
     await this.prisma.supplier.update({
       where: { id: dto.supplierId },
       data: { currentBalance: { decrement: dto.amount } },
+    });
+    // Record in cash book as outflow
+    const lastTx = await this.prisma.cashTransaction.findFirst({ orderBy: { createdAt: 'desc' } });
+    const prevBalance = lastTx?.balance ?? 0;
+    await this.prisma.cashTransaction.create({
+      data: {
+        transactionType: 'SUPPLIER_PAYMENT',
+        referenceId: payment.id,
+        referenceType: 'SupplierPayment',
+        amount: dto.amount,
+        direction: 'OUT',
+        balance: prevBalance - dto.amount,
+        description: `Payment to ${payment.supplier?.supplierName || dto.supplierId} · ${payment.paymentNumber}`,
+      },
     });
     return payment;
   }

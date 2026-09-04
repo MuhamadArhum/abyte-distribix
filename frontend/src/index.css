@@ -599,3 +599,24 @@
   max-width: 400px;
   padding: 36px 32px;
 }
+
+/* ─── Print Styles ─── */
+@media print {
+  .sidebar, .topbar, .ab-btn, button, .no-print { display: none !important; }
+  .main-area { margin: 0 !important; padding: 0 !important; }
+  .app-shell { display: block !important; }
+  .page-content { padding: 20px !important; }
+  .kpi-card { border: 1px solid #ccc !important; break-inside: avoid; }
+  .panel { border: 1px solid #ccc !important; break-inside: avoid; }
+  .data-table th { background: #f0f0f0 !important; color: #000 !important; }
+  body { background: #fff !important; color: #000 !important; }
+  .pill { border: 1px solid #999 !important; color: #000 !important; background: #eee !important; }
+  @page { margin: 15mm; }
+}
+
+/* ─── Pill blue ─── */
+.pill-blue {
+  background: rgba(59,130,246,0.12);
+  color: #3b82f6;
+  border-color: rgba(59,130,246,0.3);
+}

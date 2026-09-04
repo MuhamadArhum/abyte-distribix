@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
@@ -24,10 +24,15 @@ export class CustomersService {
     return customer;
   }
 
-  create(dto: CreateCustomerDto) {
-    return this.prisma.customer.create({
-      data: { ...dto, currentBalance: dto.openingBalance || 0 },
-    });
+  async create(dto: CreateCustomerDto) {
+    try {
+      return await this.prisma.customer.create({
+        data: { ...dto, currentBalance: dto.openingBalance || 0 },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2002') throw new ConflictException(`Customer code '${dto.customerCode}' already exists`);
+      throw e;
+    }
   }
 
   async update(id: string, dto: UpdateCustomerDto) {

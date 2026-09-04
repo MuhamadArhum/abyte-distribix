@@ -33,6 +33,9 @@ const DriversPage = lazy(() => import('@/pages/drivers/DriversPage'));
 const VehiclesPage = lazy(() => import('@/pages/vehicles/VehiclesPage'));
 const DeliveriesPage = lazy(() => import('@/pages/deliveries/DeliveriesPage'));
 const CylinderUnitsPage = lazy(() => import('@/pages/cylinder-units/CylinderUnitsPage'));
+const AuditLogsPage = lazy(() => import('@/pages/audit-logs/AuditLogsPage'));
+const BackupPage = lazy(() => import('@/pages/backup/BackupPage'));
+const RolesPage = lazy(() => import('@/pages/roles/RolesPage'));
 
 function LoadingFallback() {
   return (
@@ -79,6 +82,9 @@ export default function App() {
             <Route path="vehicles" element={<VehiclesPage />} />
             <Route path="deliveries" element={<DeliveriesPage />} />
             <Route path="cylinder-units" element={<CylinderUnitsPage />} />
+            <Route path="audit-logs" element={<AuditLogsPage />} />
+            <Route path="backup" element={<BackupPage />} />
+            <Route path="roles" element={<RolesPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

@@ -10,7 +10,14 @@ export class BackupService implements OnModuleInit {
   onModuleInit() {
     const dbUrl = process.env.DATABASE_URL || 'file:./prisma/dev.db';
     const filePath = dbUrl.replace(/^file:/, '');
-    this.dbPath = path.resolve(filePath);
+    // Prisma resolves relative file:// paths from the prisma/ schema directory
+    const resolvedDirect = path.resolve(filePath);
+    const resolvedFromPrisma = path.resolve('prisma', filePath);
+    if (!fs.existsSync(resolvedDirect) && fs.existsSync(resolvedFromPrisma)) {
+      this.dbPath = resolvedFromPrisma;
+    } else {
+      this.dbPath = resolvedDirect;
+    }
 
     // Backup dir is sibling to the db file
     this.backupDir = path.join(path.dirname(this.dbPath), 'backups');

@@ -206,6 +206,19 @@ export const settingsApi = {
   bulkUpsert: (settings: any[]) => api.post('/settings/bulk', { settings }),
 };
 
+export const auditLogsApi = {
+  getAll: (params?: { module?: string; userId?: string }) => api.get('/audit-logs', { params }),
+  getOne: (id: string) => api.get(`/audit-logs/${id}`),
+};
+
+export const rolesApi = {
+  getAll: () => api.get('/roles'),
+  getOne: (id: string) => api.get(`/roles/${id}`),
+  create: (data: any) => api.post('/roles', data),
+  update: (id: string, data: any) => api.patch(`/roles/${id}`, data),
+  delete: (id: string) => api.delete(`/roles/${id}`),
+};
+
 export const backupApi = {
   info: () => api.get('/backup/info'),
   list: () => api.get('/backup/list'),

@@ -289,3 +289,25 @@ export interface CylinderUnit {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface AuditLog {
+  id: string;
+  userId?: string;
+  user?: { id: string; fullName: string; username: string };
+  action: string;
+  module: string;
+  recordId?: string;
+  previousValue?: string;
+  newValue?: string;
+  ipAddress?: string;
+  createdAt: string;
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  description?: string;
+  permissions: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
