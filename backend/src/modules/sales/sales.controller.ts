@@ -3,8 +3,11 @@ import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN', 'MANAGER', 'SALES')
 @Controller('sales')
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}
@@ -13,5 +16,6 @@ export class SalesController {
   @Get(':id') findOne(@Param('id') id: string) { return this.salesService.findOne(id); }
   @Post() create(@Body() dto: CreateSaleDto) { return this.salesService.create(dto); }
   @Patch(':id') update(@Param('id') id: string, @Body() dto: UpdateSaleDto) { return this.salesService.update(id, dto); }
+  @Roles('ADMIN', 'MANAGER')
   @Delete(':id') remove(@Param('id') id: string) { return this.salesService.remove(id); }
 }

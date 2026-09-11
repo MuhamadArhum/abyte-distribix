@@ -1,9 +1,11 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import * as fs from 'fs';
 import * as path from 'path';
 
 @Injectable()
 export class BackupService implements OnModuleInit {
+  private readonly logger = new Logger(BackupService.name);
   private dbPath: string;
   private backupDir: string;
 
@@ -25,25 +27,36 @@ export class BackupService implements OnModuleInit {
       fs.mkdirSync(this.backupDir, { recursive: true });
     }
 
-    // Auto-backup on startup
-    this.createAutoBackup();
+    // Auto-backup on startup (covers machines that aren't left running overnight)
+    this.createAutoBackup('startup');
   }
 
-  private createAutoBackup() {
+  /**
+   * Runs every day at 2 AM as long as the app is open. Combined with the
+   * startup backup above, this gives coverage whether the distributor
+   * leaves the app running overnight or closes it and reopens it daily.
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_2AM)
+  handleScheduledBackup() {
+    this.logger.log('Running scheduled daily backup...');
+    this.createAutoBackup('daily');
+  }
+
+  private createAutoBackup(label: 'startup' | 'daily') {
     if (!fs.existsSync(this.dbPath)) return;
     try {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const dest = path.join(this.backupDir, `auto-${timestamp}.db`);
+      const dest = path.join(this.backupDir, `auto-${label}-${timestamp}.db`);
       fs.copyFileSync(this.dbPath, dest);
-      this.pruneOldBackups(10);
+      this.pruneOldBackups('auto-', 30);
     } catch (e) {
-      console.error('Auto-backup failed:', e);
+      this.logger.error('Auto-backup failed:', e as Error);
     }
   }
 
-  private pruneOldBackups(keepCount: number) {
+  private pruneOldBackups(prefix: string, keepCount: number) {
     const files = fs.readdirSync(this.backupDir)
-      .filter((f) => f.endsWith('.db'))
+      .filter((f) => f.endsWith('.db') && f.startsWith(prefix))
       .map((f) => ({ name: f, mtime: fs.statSync(path.join(this.backupDir, f)).mtimeMs }))
       .sort((a, b) => b.mtime - a.mtime);
     files.slice(keepCount).forEach((f) => {
@@ -104,6 +117,8 @@ export class BackupService implements OnModuleInit {
       backupDir: this.backupDir,
       dbSize: dbExists ? fs.statSync(this.dbPath).size : 0,
       backupCount: this.listBackups().length,
+      autoBackupEnabled: true,
+      autoBackupSchedule: 'Daily at 2:00 AM (while the app is open), plus once on every startup',
     };
   }
 }

@@ -3,8 +3,11 @@ import { CylindersService } from './cylinders.service';
 import { CreateCylinderTypeDto } from './dto/create-cylinder.dto';
 import { UpdateCylinderTypeDto } from './dto/update-cylinder.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN', 'MANAGER', 'WAREHOUSE')
 @Controller('cylinders')
 export class CylindersController {
   constructor(private readonly cylindersService: CylindersService) {}

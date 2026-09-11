@@ -3,8 +3,11 @@ import { FillingService } from './filling.service';
 import { CreateFillingDto } from './dto/create-filling.dto';
 import { UpdateFillingDto } from './dto/update-filling.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN', 'MANAGER', 'WAREHOUSE')
 @Controller('filling')
 export class FillingController {
   constructor(private readonly fillingService: FillingService) {}

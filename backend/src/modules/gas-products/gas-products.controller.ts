@@ -3,8 +3,11 @@ import { GasProductsService } from './gas-products.service';
 import { CreateGasProductDto } from './dto/create-gas-product.dto';
 import { UpdateGasProductDto } from './dto/update-gas-product.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN', 'MANAGER', 'WAREHOUSE')
 @Controller('gas-products')
 export class GasProductsController {
   constructor(private readonly gasProductsService: GasProductsService) {}

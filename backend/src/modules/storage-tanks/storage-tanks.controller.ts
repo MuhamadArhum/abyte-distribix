@@ -3,8 +3,11 @@ import { StorageTanksService } from './storage-tanks.service';
 import { CreateStorageTankDto } from './dto/create-storage-tank.dto';
 import { UpdateStorageTankDto } from './dto/update-storage-tank.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN', 'MANAGER', 'WAREHOUSE')
 @Controller('storage-tanks')
 export class StorageTanksController {
   constructor(private readonly storageTanksService: StorageTanksService) {}

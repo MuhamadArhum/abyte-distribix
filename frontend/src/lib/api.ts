@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { toast } from 'sonner';
 
 const api = axios.create({
-  baseURL: 'http://localhost:3003/api',
+  baseURL: 'http://localhost:3005/api',
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -14,7 +15,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401
+// Handle 401 (session expired) and 403 (role not permitted)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -22,6 +23,9 @@ api.interceptors.response.use(
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
+    }
+    if (error.response?.status === 403) {
+      toast.error(error.response?.data?.message || "You don't have permission to do that");
     }
     return Promise.reject(error);
   },
@@ -225,5 +229,5 @@ export const backupApi = {
   create: () => api.post('/backup/create'),
   restore: (filename: string) => api.post(`/backup/restore/${filename}`),
   delete: (filename: string) => api.delete(`/backup/${filename}`),
-  downloadUrl: (filename: string) => `http://localhost:3003/api/backup/download/${encodeURIComponent(filename)}`,
+  downloadUrl: (filename: string) => `http://localhost:3005/api/backup/download/${encodeURIComponent(filename)}`,
 };

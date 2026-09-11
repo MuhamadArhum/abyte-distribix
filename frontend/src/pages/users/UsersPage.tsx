@@ -5,12 +5,13 @@ import { formatDate } from '@/lib/utils';
 import type { User } from '@/types';
 import type { ColumnDef } from '@tanstack/react-table';
 
-const ROLES = ['ADMIN', 'MANAGER', 'OPERATOR', 'ACCOUNTANT', 'VIEWER'];
-const EMPTY_FORM = { username: '', email: '', fullName: '', password: '', role: 'OPERATOR' };
+const ROLES = ['ADMIN', 'MANAGER', 'ACCOUNTANT', 'WAREHOUSE', 'SALES'];
+const EMPTY_FORM = { username: '', email: '', fullName: '', password: '', role: 'SALES' };
 
 const rolePill = (r: string) => {
   if (r === 'ADMIN') return <span className="pill pill-red">{r}</span>;
   if (r === 'MANAGER') return <span className="pill pill-amber">{r}</span>;
+  if (r === 'ACCOUNTANT') return <span className="pill pill-green">{r}</span>;
   return <span className="pill pill-steel">{r}</span>;
 };
 

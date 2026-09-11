@@ -1,6 +1,8 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAppStore } from '@/stores/appStore';
+import { useAuthStore } from '@/stores/authStore';
+import { canAccessPath } from '@/lib/permissions';
 
 interface NavItem {
   label: string;
@@ -154,6 +156,14 @@ const navGroups: NavGroup[] = [
 export function Sidebar() {
   const location = useLocation();
   const { mobileSidebarOpen } = useAppStore();
+  const { user } = useAuthStore();
+
+  const visibleGroups = navGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => canAccessPath(user?.role, item.path)),
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <aside className={`sidebar${mobileSidebarOpen ? ' mobile-open' : ''}`}>
@@ -163,7 +173,7 @@ export function Sidebar() {
       </div>
 
       <nav className="sidebar-nav">
-        {navGroups.map((group, gi) => (
+        {visibleGroups.map((group, gi) => (
           <div key={gi}>
             <div className="nav-label">{group.title}</div>
             {group.items.map((item) => {

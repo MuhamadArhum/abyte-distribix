@@ -7,6 +7,8 @@ interface BackupInfo {
   backupDir: string;
   dbSize: number;
   backupCount: number;
+  autoBackupEnabled: boolean;
+  autoBackupSchedule: string;
 }
 
 interface BackupFile {
@@ -106,7 +108,7 @@ export default function BackupPage() {
         <div>
           <div className="section-title">Backup & Restore</div>
           <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>
-            Database backup management — auto-retains last 10 backups
+            Database backup management — auto-retains last 30 automatic backups
           </div>
         </div>
         <button className="ab-btn ab-btn-primary" onClick={handleCreate} disabled={creating || loading}>
@@ -135,6 +137,18 @@ export default function BackupPage() {
             <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--ink)', marginTop: 6, wordBreak: 'break-all' }}>{info.dbPath}</div>
             <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 10, color: 'var(--steel)', marginTop: 4 }}>Backups: {info.backupDir}</div>
           </div>
+        </div>
+      )}
+
+      {/* Auto-Backup Status Banner */}
+      {info?.autoBackupEnabled && (
+        <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 'var(--radius)', padding: '10px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <span style={{ fontSize: 12, color: '#16a34a', fontFamily: 'IBM Plex Mono,monospace' }}>
+            Automatic backup is ON — {info.autoBackupSchedule}
+          </span>
         </div>
       )}
 

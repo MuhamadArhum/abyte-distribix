@@ -1,12 +1,14 @@
 import React, { useEffect } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useAuthStore } from '@/stores/authStore';
 import { useAppStore } from '@/stores/appStore';
+import { canAccessPath } from '@/lib/permissions';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 
 export function AppLayout() {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const { mobileSidebarOpen, setMobileSidebarOpen } = useAppStore();
   const location = useLocation();
 
@@ -17,6 +19,11 @@ export function AppLayout() {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (!canAccessPath(user?.role, location.pathname)) {
+    toast.error("You don't have permission to access that page");
+    return <Navigate to="/dashboard" replace />;
   }
 
   return (

@@ -1,4 +1,5 @@
-import { IsString, IsEmail, IsOptional, IsBoolean } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsBoolean, IsIn } from 'class-validator';
+import { USER_ROLES } from './create-user.dto';
 
 export class UpdateUserDto {
   @IsEmail()
@@ -11,6 +12,7 @@ export class UpdateUserDto {
 
   @IsString()
   @IsOptional()
+  @IsIn(USER_ROLES)
   role?: string;
 
   @IsBoolean()

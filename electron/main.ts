@@ -6,7 +6,7 @@ import * as path from 'path';
 let mainWindow: BrowserWindow | null = null;
 let backendProcess: ChildProcess | null = null;
 
-const BACKEND_PORT = 3003;
+const BACKEND_PORT = 3005;
 const FRONTEND_PORT = 5176;
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 

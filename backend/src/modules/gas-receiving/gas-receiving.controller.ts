@@ -3,8 +3,11 @@ import { GasReceivingService } from './gas-receiving.service';
 import { CreateGasReceivingDto } from './dto/create-gas-receiving.dto';
 import { UpdateGasReceivingDto } from './dto/update-gas-receiving.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN', 'MANAGER', 'WAREHOUSE')
 @Controller('gas-receiving')
 export class GasReceivingController {
   constructor(private readonly gasReceivingService: GasReceivingService) {}
