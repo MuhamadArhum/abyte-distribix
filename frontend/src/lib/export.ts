@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { settingsApi } from './api';
@@ -26,22 +26,47 @@ async function getCompanyInfo() {
   return companyInfoCache;
 }
 
+/** Adds one worksheet built from an array of flat row objects — columns are
+ * the union of keys across every row (matching the old xlsx library's
+ * behavior), not just whichever keys the first row happens to have. */
+function addRowsAsSheet(wb: ExcelJS.Workbook, sheetName: string, rows: Record<string, any>[]) {
+  const dataRows = rows.length ? rows : [{}];
+  const columns: string[] = [];
+  for (const row of dataRows) {
+    for (const key of Object.keys(row)) {
+      if (!columns.includes(key)) columns.push(key);
+    }
+  }
+  const ws = wb.addWorksheet(sheetName.slice(0, 31));
+  ws.columns = columns.map((key) => ({ header: key, key }));
+  dataRows.forEach((row) => ws.addRow(row));
+}
+
+async function downloadWorkbook(wb: ExcelJS.Workbook, filename: string) {
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 /** Exports an array of flat objects to a downloadable .xlsx file. */
-export function exportToExcel(filename: string, rows: Record<string, any>[], sheetName = 'Report') {
-  const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{}]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
-  XLSX.writeFile(wb, `${filename}.xlsx`);
+export async function exportToExcel(filename: string, rows: Record<string, any>[], sheetName = 'Report') {
+  const wb = new ExcelJS.Workbook();
+  addRowsAsSheet(wb, sheetName, rows);
+  await downloadWorkbook(wb, `${filename}.xlsx`);
 }
 
 /** Exports several named row-sets to one .xlsx file, one sheet per set. */
-export function exportMultiSheetExcel(filename: string, sheets: { name: string; rows: Record<string, any>[] }[]) {
-  const wb = XLSX.utils.book_new();
+export async function exportMultiSheetExcel(filename: string, sheets: { name: string; rows: Record<string, any>[] }[]) {
+  const wb = new ExcelJS.Workbook();
   for (const { name, rows } of sheets) {
-    const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{}]);
-    XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31));
+    addRowsAsSheet(wb, name, rows);
   }
-  XLSX.writeFile(wb, `${filename}.xlsx`);
+  await downloadWorkbook(wb, `${filename}.xlsx`);
 }
 
 /** Exports a titled table to a downloadable A4 .pdf file. */

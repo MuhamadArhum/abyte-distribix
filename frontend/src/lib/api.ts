@@ -1,8 +1,13 @@
 import axios from 'axios';
 import { toast } from 'sonner';
 
+// Falls back to the Electron/local-dev default so nothing breaks for the
+// current desktop packaging (backend always spawned on localhost:3005) —
+// override with VITE_API_BASE_URL at build time for any other deployment.
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3005/api';
+
 const api = axios.create({
-  baseURL: 'http://localhost:3005/api',
+  baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -292,5 +297,5 @@ export const backupApi = {
   create: () => api.post('/backup/create'),
   restore: (filename: string) => api.post(`/backup/restore/${filename}`),
   delete: (filename: string) => api.delete(`/backup/${filename}`),
-  downloadUrl: (filename: string) => `http://localhost:3005/api/backup/download/${encodeURIComponent(filename)}`,
+  downloadUrl: (filename: string) => `${API_BASE_URL}/backup/download/${encodeURIComponent(filename)}`,
 };

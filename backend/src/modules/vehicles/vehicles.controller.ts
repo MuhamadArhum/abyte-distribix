@@ -3,6 +3,8 @@ import { VehiclesService } from './vehicles.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CreateVehicleDto } from './dto/create-vehicle.dto';
+import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('ADMIN', 'MANAGER', 'WAREHOUSE')
@@ -22,7 +24,7 @@ export class VehiclesController {
   }
   @Get('summary') getSummary(@Request() req: any) { return this.vehiclesService.getSummary(req.user?.companyId); }
   @Get(':id') findOne(@Param('id') id: string, @Request() req: any) { return this.vehiclesService.findOne(id, req.user?.companyId); }
-  @Post() create(@Body() dto: any, @Request() req: any) { return this.vehiclesService.create(dto, req.user?.companyId); }
-  @Patch(':id') update(@Param('id') id: string, @Body() dto: any, @Request() req: any) { return this.vehiclesService.update(id, dto, req.user?.companyId); }
+  @Post() create(@Body() dto: CreateVehicleDto, @Request() req: any) { return this.vehiclesService.create(dto, req.user?.companyId); }
+  @Patch(':id') update(@Param('id') id: string, @Body() dto: UpdateVehicleDto, @Request() req: any) { return this.vehiclesService.update(id, dto, req.user?.companyId); }
   @Delete(':id') remove(@Param('id') id: string, @Request() req: any) { return this.vehiclesService.remove(id, req.user?.companyId); }
 }

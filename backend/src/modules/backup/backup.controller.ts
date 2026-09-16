@@ -3,12 +3,14 @@ import { Response } from 'express';
 import * as fs from 'fs';
 import { BackupService } from './backup.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
 
+// Backup operates on the single shared database file underneath every
+// tenant — a company-level ADMIN is NOT authorized here, only the platform
+// super-admin, or every company's admin could read/restore/delete every
+// other company's data (see audit finding SEC-02).
 @Controller('backup')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN')
+@UseGuards(JwtAuthGuard, SuperAdminGuard)
 export class BackupController {
   constructor(private readonly backupService: BackupService) {}
 

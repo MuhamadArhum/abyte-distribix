@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { RolesModule } from './modules/roles/roles.module';
@@ -32,6 +34,11 @@ import { PrismaModule } from './prisma/prisma.module';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
+    // Global default: 100 requests / minute per IP. The login endpoint
+    // layers a much stricter limit on top of this via @Throttle (see
+    // AuthController) since it's the one brute-forceable-at-network-speed
+    // endpoint identified in the audit (SEC-03).
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -60,6 +67,9 @@ import { PrismaModule } from './prisma/prisma.module';
     DeliveriesModule,
     CylinderUnitsModule,
     CompaniesModule,
+  ],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}

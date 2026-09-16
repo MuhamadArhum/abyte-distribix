@@ -39,6 +39,12 @@ export const ROUTE_ROLES: Record<string, string[]> = {
   '/settings': ['ADMIN'],
 };
 
+// These operate on data outside any single company (the whole shared
+// database file, or the company list itself), so even a company-level
+// ADMIN must NOT get the usual "ADMIN can access anything" bypass below —
+// only the platform super-admin account may reach them.
+export const SUPER_ADMIN_ONLY_ROUTES = ['/backup', '/companies'];
+
 export function normalizeRole(role?: string): string {
   if (!role) return '';
   return LEGACY_ROLE_ALIASES[role] || role;
@@ -53,7 +59,10 @@ function matchRoute(path: string): string | undefined {
   return candidates[0];
 }
 
-export function canAccessPath(role: string | undefined, path: string): boolean {
+export function canAccessPath(role: string | undefined, path: string, isSuperAdmin?: boolean): boolean {
+  if (SUPER_ADMIN_ONLY_ROUTES.some((p) => path === p || path.startsWith(p + '/'))) {
+    return !!isSuperAdmin;
+  }
   const norm = normalizeRole(role);
   if (norm === 'ADMIN') return true;
   const matched = matchRoute(path);

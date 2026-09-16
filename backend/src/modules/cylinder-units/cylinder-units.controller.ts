@@ -3,6 +3,8 @@ import { CylinderUnitsService } from './cylinder-units.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CreateCylinderUnitDto } from './dto/create-cylinder-unit.dto';
+import { UpdateCylinderUnitDto } from './dto/update-cylinder-unit.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('ADMIN', 'MANAGER', 'WAREHOUSE')
@@ -30,7 +32,7 @@ export class CylinderUnitsController {
   }
 
   @Get(':id') findOne(@Param('id') id: string, @Request() req: any) { return this.service.findOne(id, req.user?.companyId); }
-  @Post() create(@Body() dto: any, @Request() req: any) { return this.service.create(dto, req.user?.companyId); }
-  @Patch(':id') update(@Param('id') id: string, @Body() dto: any, @Request() req: any) { return this.service.update(id, dto, req.user?.companyId); }
+  @Post() create(@Body() dto: CreateCylinderUnitDto, @Request() req: any) { return this.service.create(dto, req.user?.companyId); }
+  @Patch(':id') update(@Param('id') id: string, @Body() dto: UpdateCylinderUnitDto, @Request() req: any) { return this.service.update(id, dto, req.user?.companyId); }
   @Delete(':id') remove(@Param('id') id: string, @Request() req: any) { return this.service.remove(id, req.user?.companyId); }
 }

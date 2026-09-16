@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import helmet from 'helmet';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 
 try {
@@ -21,7 +22,25 @@ async function bootstrap() {
   }
 
   const app = await NestFactory.create(AppModule);
-  app.enableCors({ origin: '*' });
+  // API-only backend (no HTML served here), so the default CSP is disabled
+  // to avoid interfering with plain JSON responses — the other headers
+  // (X-Content-Type-Options, X-Frame-Options, HSTS, etc.) still apply.
+  app.use(helmet({ contentSecurityPolicy: false }));
+
+  // The packaged Electron app loads the UI from a `file://` page, which
+  // Chromium sends as the literal Origin "null" on cross-origin requests —
+  // not a wildcard, and not something to special-case away. `undefined`
+  // covers non-browser callers (curl, health checks) that send no Origin
+  // header at all. Extra origins (e.g. a future hosted deployment) can be
+  // added via CORS_ALLOWED_ORIGINS without another code change.
+  const extraOrigins = (process.env.CORS_ALLOWED_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean);
+  const allowedOrigins = new Set(['null', 'http://localhost:5176', ...extraOrigins]);
+  app.enableCors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.has(origin)) callback(null, true);
+      else callback(new Error(`Origin ${origin} is not allowed by CORS`), false);
+    },
+  });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalFilters(new PrismaExceptionFilter());
   app.setGlobalPrefix('api');

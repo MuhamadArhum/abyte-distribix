@@ -3,6 +3,7 @@ import { InventoryService } from './inventory.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CreateAdjustmentDto } from './dto/create-adjustment.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('ADMIN', 'MANAGER', 'WAREHOUSE')
@@ -19,5 +20,7 @@ export class InventoryController {
     return this.inventoryService.getCylinderStock(req.user?.companyId, search, page ? Number(page) : 1, limit ? Number(limit) : 20);
   }
   @Get('transactions') getTransactions(@Query('tankId') tankId?: string, @Request() req?: any) { return this.inventoryService.getTransactions(req.user?.companyId, tankId); }
-  @Post('adjustment') createAdjustment(@Body() body: any, @Request() req: any) { return this.inventoryService.createAdjustment(body, req.user?.companyId); }
+  @Post('adjustment') createAdjustment(@Body() body: CreateAdjustmentDto, @Request() req: any) {
+    return this.inventoryService.createAdjustment({ ...body, createdById: req.user?.userId }, req.user?.companyId);
+  }
 }

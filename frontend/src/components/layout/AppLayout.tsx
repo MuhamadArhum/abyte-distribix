@@ -21,7 +21,7 @@ export function AppLayout() {
     return <Navigate to="/login" replace />;
   }
 
-  if (!canAccessPath(user?.role, location.pathname)) {
+  if (!canAccessPath(user?.role, location.pathname, user?.isSuperAdmin)) {
     toast.error("You don't have permission to access that page");
     return <Navigate to="/dashboard" replace />;
   }

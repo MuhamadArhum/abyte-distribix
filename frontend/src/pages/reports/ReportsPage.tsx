@@ -173,12 +173,12 @@ export default function ReportsPage() {
     finally { setLoading(false); }
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (!data) return;
     const { filename, excel } = buildExport(selectedReport, data);
     if (Array.isArray(excel)) {
-      if (excel.length && 'rows' in (excel[0] as any)) exportMultiSheetExcel(filename, excel as any);
-      else exportToExcel(filename, excel as Record<string, any>[]);
+      if (excel.length && 'rows' in (excel[0] as any)) await exportMultiSheetExcel(filename, excel as any);
+      else await exportToExcel(filename, excel as Record<string, any>[]);
     }
   };
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { settingsApi, backupApi } from '@/lib/api';
+import { useAuthStore } from '@/stores/authStore';
 
 const DEFAULT_SETTINGS = [
   { key: 'company_name', value: 'AbyteDistribix LPG', description: 'Company Name' },
@@ -30,6 +31,7 @@ function formatBackupDate(dateStr: string) {
 interface BackupFile { filename: string; size: number; createdAt: string; }
 
 export default function SettingsPage() {
+  const { user, token } = useAuthStore();
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -52,13 +54,17 @@ export default function SettingsPage() {
       }
     }).catch(() => {}).finally(() => setLoading(false));
 
-    loadBackupInfo();
-  }, []);
+    if (user?.isSuperAdmin) loadBackupInfo();
+  }, [user?.isSuperAdmin]);
 
+  // Backup & Restore is a super-admin-only, whole-database operation (it
+  // reaches every company's data, not just this one) — both the HTTP API
+  // (SuperAdminGuard) and the Electron IPC handlers (requireSuperAdmin in
+  // main.ts) enforce this independently of whether this section is shown.
   const loadBackupInfo = useCallback(async () => {
     try {
       if (isElectron) {
-        const [info, list] = await Promise.all([eAPI.backup.info(), eAPI.backup.list()]);
+        const [info, list] = await Promise.all([eAPI.backup.info(token), eAPI.backup.list(token)]);
         setDbInfo(info);
         setBackups(list);
       } else {
@@ -67,7 +73,7 @@ export default function SettingsPage() {
         setBackups(list.data);
       }
     } catch {}
-  }, []);
+  }, [token]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -85,7 +91,7 @@ export default function SettingsPage() {
     setBackupLoading(true);
     try {
       if (isElectron) {
-        const result = await eAPI.backup.export();
+        const result = await eAPI.backup.export(token);
         if (result.cancelled) return;
         if (result.success) showStatus('success', `Backup exported to: ${result.path}`);
         else showStatus('error', result.error || 'Export failed');
@@ -103,7 +109,7 @@ export default function SettingsPage() {
     if (!confirm('WARNING: This will replace the current database with the selected backup. All data after the backup date will be lost. Continue?')) return;
     setBackupLoading(true);
     try {
-      const result = await eAPI.backup.import();
+      const result = await eAPI.backup.import(token);
       if (result.cancelled) return;
       if (result.success) { showStatus('success', 'Database restored successfully. Reloading...'); setTimeout(() => window.location.reload(), 2000); }
       else showStatus('error', result.error || 'Restore failed');
@@ -117,7 +123,7 @@ export default function SettingsPage() {
     try {
       let result: any;
       if (isElectron) {
-        result = await eAPI.backup.restoreAuto(filename);
+        result = await eAPI.backup.restoreAuto(token, filename);
       } else {
         result = (await backupApi.restore(filename)).data;
       }
@@ -130,7 +136,7 @@ export default function SettingsPage() {
   const handleDeleteBackup = async (filename: string) => {
     if (!confirm(`Delete backup "${filename}"?`)) return;
     try {
-      if (isElectron) await eAPI.backup.delete(filename);
+      if (isElectron) await eAPI.backup.delete(token, filename);
       else await backupApi.delete(filename);
       showStatus('success', 'Backup deleted');
       loadBackupInfo();
@@ -182,7 +188,10 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Backup & Restore */}
+        {/* Backup & Restore — reaches every company's data, so this whole
+            section is super-admin only (mirrors the backend/Electron-level
+            checks; hiding it here is UX, not the actual access control). */}
+        {user?.isSuperAdmin && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* DB Info Card */}
           <div className="panel" style={{ padding: 24 }}>
@@ -294,6 +303,7 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

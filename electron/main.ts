@@ -19,6 +19,29 @@ function ensureBackupDir() {
 }
 
 /**
+ * These IPC handlers operate directly on the filesystem, underneath every
+ * company's data — they must never trust the renderer's UI-level gating
+ * alone (a hidden button is not access control). Each call independently
+ * verifies, against the locally-running backend it already trusts, that the
+ * supplied token belongs to an active platform super-admin before doing
+ * anything. This mirrors the backend's own SuperAdminGuard rather than
+ * re-implementing JWT verification here.
+ */
+async function requireSuperAdmin(token: string | undefined): Promise<boolean> {
+  if (!token) return false;
+  try {
+    const res = await fetch(`http://localhost:${BACKEND_PORT}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return false;
+    const user = (await res.json()) as { isSuperAdmin?: boolean };
+    return user?.isSuperAdmin === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Generates a random JWT signing secret on first run and persists it in
  * userData so tokens survive app restarts, but never ships a fixed/known
  * value in the packaged app.
@@ -121,7 +144,8 @@ function createWindow(): void {
 
 /* ── Backup IPC Handlers ── */
 
-ipcMain.handle('backup:export', async () => {
+ipcMain.handle('backup:export', async (_, token: string) => {
+  if (!(await requireSuperAdmin(token))) return { success: false, error: 'Super-admin access required' };
   const today = new Date().toISOString().split('T')[0];
   const { filePath, canceled } = await dialog.showSaveDialog({
     title: 'Export Database Backup',
@@ -138,7 +162,8 @@ ipcMain.handle('backup:export', async () => {
   }
 });
 
-ipcMain.handle('backup:import', async () => {
+ipcMain.handle('backup:import', async (_, token: string) => {
+  if (!(await requireSuperAdmin(token))) return { success: false, error: 'Super-admin access required' };
   const { filePaths, canceled } = await dialog.showOpenDialog({
     title: 'Select Backup File to Restore',
     filters: [{ name: 'AbyteDistribix Backup', extensions: ['db'] }],
@@ -164,7 +189,8 @@ ipcMain.handle('backup:import', async () => {
   }
 });
 
-ipcMain.handle('backup:list', () => {
+ipcMain.handle('backup:list', async (_, token: string) => {
+  if (!(await requireSuperAdmin(token))) return [];
   ensureBackupDir();
   return fs.readdirSync(backupDir)
     .filter((f) => f.endsWith('.db'))
@@ -175,7 +201,8 @@ ipcMain.handle('backup:list', () => {
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 });
 
-ipcMain.handle('backup:restore-auto', async (_, filename: string) => {
+ipcMain.handle('backup:restore-auto', async (_, token: string, filename: string) => {
+  if (!(await requireSuperAdmin(token))) return { success: false, error: 'Super-admin access required' };
   const src = path.join(backupDir, filename);
   if (!fs.existsSync(src)) return { success: false, error: 'Backup not found' };
   if (!src.startsWith(backupDir)) return { success: false, error: 'Invalid path' };
@@ -194,20 +221,24 @@ ipcMain.handle('backup:restore-auto', async (_, filename: string) => {
   }
 });
 
-ipcMain.handle('backup:delete', (_, filename: string) => {
+ipcMain.handle('backup:delete', async (_, token: string, filename: string) => {
+  if (!(await requireSuperAdmin(token))) return { success: false, error: 'Super-admin access required' };
   const filePath = path.join(backupDir, filename);
   if (!fs.existsSync(filePath) || !filePath.startsWith(backupDir)) return { success: false };
   try { fs.unlinkSync(filePath); return { success: true }; } catch (e: any) { return { success: false, error: e.message }; }
 });
 
-ipcMain.handle('backup:info', () => ({
-  dbPath,
-  backupDir,
-  dbExists: fs.existsSync(dbPath),
-  dbSize: fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0,
-  backupCount: fs.existsSync(backupDir) ? fs.readdirSync(backupDir).filter((f) => f.endsWith('.db')).length : 0,
-  isElectron: true,
-}));
+ipcMain.handle('backup:info', async (_, token: string) => {
+  if (!(await requireSuperAdmin(token))) return { isElectron: true, unauthorized: true };
+  return {
+    dbPath,
+    backupDir,
+    dbExists: fs.existsSync(dbPath),
+    dbSize: fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0,
+    backupCount: fs.existsSync(backupDir) ? fs.readdirSync(backupDir).filter((f) => f.endsWith('.db')).length : 0,
+    isElectron: true,
+  };
+});
 
 /* ── App Lifecycle ── */
 
