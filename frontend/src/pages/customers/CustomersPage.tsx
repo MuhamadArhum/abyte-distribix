@@ -1,24 +1,32 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { customersApi } from '@/lib/api';
-import { DataTable } from '@/components/shared/DataTable';
+import Pagination from '@/components/shared/Pagination';
 import { formatCurrency } from '@/lib/utils';
 import type { Customer } from '@/types';
-import type { ColumnDef } from '@tanstack/react-table';
+import { useReactTable, getCoreRowModel, flexRender, type ColumnDef } from '@tanstack/react-table';
 
 const CUSTOMER_TYPES = ['RETAIL', 'DEALER', 'COMMERCIAL', 'INDIVIDUAL'];
 const EMPTY_FORM = { customerCode: '', businessName: '', contactPerson: '', phone: '', email: '', address: '', customerType: 'RETAIL', creditLimit: 0, openingBalance: 0, paymentTerms: 30 };
 
+interface Summary { total: number; active: number; inactive: number; totalReceivables: number; overdue: number }
+
 export default function CustomersPage() {
   const navigate = useNavigate();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Filters
+  // Server-side filters — the customer list is fetched page-by-page instead
+  // of loading the full table (10k+ rows) into the browser every time.
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [filterBalance, setFilterBalance] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   // Form
   const [showForm, setShowForm] = useState(false);
@@ -26,13 +34,39 @@ export default function CustomersPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
 
-  useEffect(() => { load(); }, []);
+  // Debounce the free-text search so we don't fire a request per keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Any filter change re-starts pagination from page 1.
+  useEffect(() => { setPage(1); }, [search, filterType, filterStatus, filterBalance]);
+
+  useEffect(() => { load(); }, [search, filterType, filterStatus, filterBalance, page, pageSize]);
+  useEffect(() => { loadSummary(); }, []);
 
   const load = async () => {
-    try { const r = await customersApi.getAll(); setCustomers(r.data); }
-    catch { alert('Failed to load customers'); }
+    setLoading(true);
+    try {
+      const r = await customersApi.getAll({
+        search: search || undefined,
+        customerType: filterType !== 'ALL' ? filterType : undefined,
+        status: filterStatus !== 'ALL' ? filterStatus : undefined,
+        balance: filterBalance !== 'ALL' ? filterBalance : undefined,
+        page, limit: pageSize,
+      });
+      setCustomers(r.data.data);
+      setTotal(r.data.total);
+    } catch { alert('Failed to load customers'); }
     finally { setLoading(false); }
   };
+
+  const loadSummary = async () => {
+    try { const r = await customersApi.getSummary(); setSummary(r.data); } catch { /* KPI row just stays blank */ }
+  };
+
+  const refreshAfterMutation = () => { load(); loadSummary(); };
 
   const openAdd = () => { setEditId(null); setForm(EMPTY_FORM); setShowForm(true); };
   const openEdit = (c: Customer) => {
@@ -45,44 +79,30 @@ export default function CustomersPage() {
     if (!form.customerCode || !form.businessName || !form.phone) { alert('Code, Name and Phone required'); return; }
     setSaving(true);
     try {
+      // Same phone number often means the same person was already entered
+      // under a different business name — worth a heads-up at 10k+ customers.
+      const dupCheck = await customersApi.getAll({ search: form.phone, limit: 5 });
+      const dupe = (dupCheck.data.data as Customer[] || []).find((c) => c.phone === form.phone && c.id !== editId);
+      if (dupe && !confirm(`Phone ${form.phone} is already used by "${dupe.businessName}" (${dupe.customerCode}). Save anyway?`)) {
+        setSaving(false); return;
+      }
       if (editId) await customersApi.update(editId, form);
       else await customersApi.create(form);
-      setShowForm(false); load();
+      setShowForm(false); refreshAfterMutation();
     } catch (e: any) { alert(e.response?.data?.message || 'Failed to save'); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this customer?')) return;
-    try { await customersApi.delete(id); load(); }
+    try { await customersApi.delete(id); refreshAfterMutation(); }
     catch { alert('Failed to delete'); }
   };
 
   const handleToggleStatus = async (c: Customer) => {
-    try { await customersApi.update(c.id, { status: c.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' }); load(); }
+    try { await customersApi.update(c.id, { status: c.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' }); refreshAfterMutation(); }
     catch { alert('Failed to update status'); }
   };
-
-  // Filtered data
-  const filtered = useMemo(() => {
-    return customers.filter((c) => {
-      const q = search.toLowerCase();
-      const matchSearch = !q || c.businessName.toLowerCase().includes(q) || c.customerCode.toLowerCase().includes(q) || c.phone.includes(q) || (c.contactPerson || '').toLowerCase().includes(q);
-      const matchType = filterType === 'ALL' || c.customerType === filterType;
-      const matchStatus = filterStatus === 'ALL' || c.status === filterStatus;
-      const matchBalance =
-        filterBalance === 'ALL' ? true :
-        filterBalance === 'HAS_BALANCE' ? c.currentBalance > 0 :
-        filterBalance === 'OVERDUE' ? c.currentBalance > c.creditLimit :
-        filterBalance === 'CLEAR' ? c.currentBalance === 0 : true;
-      return matchSearch && matchType && matchStatus && matchBalance;
-    });
-  }, [customers, search, filterType, filterStatus, filterBalance]);
-
-  // KPIs
-  const totalReceivables = customers.reduce((s, c) => s + (c.currentBalance > 0 ? c.currentBalance : 0), 0);
-  const overdue = customers.filter((c) => c.currentBalance > c.creditLimit).length;
-  const activeCount = customers.filter((c) => c.status === 'ACTIVE').length;
 
   const columns: ColumnDef<Customer>[] = [
     {
@@ -136,28 +156,35 @@ export default function CustomersPage() {
     },
   ];
 
+  // Table is rendered manually (not via the shared DataTable) because that
+  // component paginates a fully-loaded array client-side — wrong once the
+  // server itself is only sending one page of rows.
+  const table = useReactTable({ data: customers, columns, getCoreRowModel: getCoreRowModel() });
+
+  const hasFilters = search || filterType !== 'ALL' || filterStatus !== 'ALL' || filterBalance !== 'ALL';
+
   return (
     <div className="page-content">
       {/* KPI Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
         <div className="kpi-card">
           <div className="kpi-top"><span className="kpi-label">Total Customers</span></div>
-          <div className="kpi-value">{customers.length}</div>
-          <div className="kpi-sub">{activeCount} active</div>
+          <div className="kpi-value">{summary?.total ?? '—'}</div>
+          <div className="kpi-sub">{summary?.active ?? '—'} active</div>
         </div>
         <div className="kpi-card alt">
           <div className="kpi-top"><span className="kpi-label">Total Receivables</span></div>
-          <div className="kpi-value">{formatCurrency(totalReceivables)}</div>
+          <div className="kpi-value">{formatCurrency(summary?.totalReceivables ?? 0)}</div>
           <div className="kpi-sub">Outstanding balance</div>
         </div>
         <div className="kpi-card red">
           <div className="kpi-top"><span className="kpi-label">Overdue</span></div>
-          <div className="kpi-value">{overdue}</div>
+          <div className="kpi-value">{summary?.overdue ?? '—'}</div>
           <div className="kpi-sub">Exceeded credit limit</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-top"><span className="kpi-label">Inactive</span></div>
-          <div className="kpi-value">{customers.length - activeCount}</div>
+          <div className="kpi-value">{summary?.inactive ?? '—'}</div>
           <div className="kpi-sub">Inactive accounts</div>
         </div>
       </div>
@@ -166,7 +193,7 @@ export default function CustomersPage() {
       <div className="panel-head" style={{ background: 'var(--paper-light)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)', marginBottom: 12 }}>
         <div>
           <div className="section-title">Customers</div>
-          <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>{filtered.length} of {customers.length} shown</div>
+          <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>{total} matching</div>
         </div>
         <button className="ab-btn ab-btn-primary" onClick={openAdd}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -179,8 +206,8 @@ export default function CustomersPage() {
         <input
           className="ab-input"
           placeholder="Search by name, code, phone..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           style={{ flex: '1 1 220px', minWidth: 180 }}
         />
         <select className="ab-input ab-select" value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ flex: '0 0 160px' }}>
@@ -198,8 +225,8 @@ export default function CustomersPage() {
           <option value="OVERDUE">Overdue (Over Limit)</option>
           <option value="CLEAR">Clear (Zero Balance)</option>
         </select>
-        {(search || filterType !== 'ALL' || filterStatus !== 'ALL' || filterBalance !== 'ALL') && (
-          <button className="ab-btn ab-btn-outline" style={{ fontSize: 12 }} onClick={() => { setSearch(''); setFilterType('ALL'); setFilterStatus('ALL'); setFilterBalance('ALL'); }}>
+        {hasFilters && (
+          <button className="ab-btn ab-btn-outline" style={{ fontSize: 12 }} onClick={() => { setSearchInput(''); setFilterType('ALL'); setFilterStatus('ALL'); setFilterBalance('ALL'); }}>
             Clear Filters
           </button>
         )}
@@ -207,10 +234,49 @@ export default function CustomersPage() {
 
       {/* Table */}
       <div className="panel">
-        {loading
-          ? <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>Loading...</div>
-          : <DataTable columns={columns} data={filtered} searchKey="businessName" searchPlaceholder="" hideSearch />
-        }
+        {loading ? (
+          <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>Loading...</div>
+        ) : (
+          <>
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
+                  {table.getHeaderGroups().map((hg) => (
+                    <tr key={hg.id}>
+                      {hg.headers.map((header) => (
+                        <th key={header.id}>{header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}</th>
+                      ))}
+                    </tr>
+                  ))}
+                </thead>
+                <tbody>
+                  {table.getRowModel().rows.length ? (
+                    table.getRowModel().rows.map((row) => (
+                      <tr key={row.id}>
+                        {row.getVisibleCells().map((cell) => (
+                          <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                        ))}
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={columns.length} style={{ textAlign: 'center', padding: '40px 18px', color: 'var(--steel)', fontFamily: 'IBM Plex Mono, monospace', fontSize: 12 }}>
+                        No records found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              total={total}
+              page={page}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+            />
+          </>
+        )}
       </div>
 
       {/* Add / Edit Modal */}

@@ -1,10 +1,10 @@
-import { IsString, IsNotEmpty, IsNumber, IsOptional, IsDateString, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsOptional, IsDateString, IsArray, ValidateNested, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class SaleItemDto {
   @IsString() @IsNotEmpty() cylinderTypeId: string;
-  @IsNumber() quantity: number;
-  @IsNumber() unitPrice: number;
+  @IsNumber() @Min(1) quantity: number;
+  @IsNumber() @Min(0) unitPrice: number;
   @IsNumber() @IsOptional() discount?: number;
 }
 

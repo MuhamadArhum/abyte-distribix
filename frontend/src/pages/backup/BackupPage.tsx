@@ -9,6 +9,7 @@ interface BackupInfo {
   backupCount: number;
   autoBackupEnabled: boolean;
   autoBackupSchedule: string;
+  autoBackupRetention: number;
 }
 
 interface BackupFile {
@@ -108,7 +109,7 @@ export default function BackupPage() {
         <div>
           <div className="section-title">Backup & Restore</div>
           <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>
-            Database backup management — auto-retains last 30 automatic backups
+            Database backup management — auto-retains last {info?.autoBackupRetention ?? '—'} automatic backups
           </div>
         </div>
         <button className="ab-btn ab-btn-primary" onClick={handleCreate} disabled={creating || loading}>

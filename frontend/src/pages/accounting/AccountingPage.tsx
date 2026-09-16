@@ -1,34 +1,45 @@
 import React, { useEffect, useState } from 'react';
 import { accountingApi } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import Pagination from '@/components/shared/Pagination';
+
+type Book = 'cash' | 'bank';
 
 export default function AccountingPage() {
   const [profitLoss, setProfitLoss] = useState<any>(null);
-  const [cashBook, setCashBook] = useState<any[]>([]);
+  const [book, setBook] = useState<Book>('cash');
+  const [entries, setEntries] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [pl, cb] = await Promise.all([
-        accountingApi.getProfitLoss({ startDate, endDate }),
-        accountingApi.getCashBook({ startDate, endDate }),
-      ]);
-      setProfitLoss(pl.data);
-      setCashBook(cb.data);
-    } catch { alert('Failed to load accounting data'); }
-    finally { setLoading(false); }
+  const fetchPL = () => {
+    accountingApi.getProfitLoss({ startDate, endDate }).then((r) => setProfitLoss(r.data)).catch(() => { /* P&L cards just stay blank */ });
   };
 
-  useEffect(() => { fetchData(); }, []);
+  const fetchBook = () => {
+    setLoading(true);
+    const call = book === 'cash' ? accountingApi.getCashBook : accountingApi.getBankBook;
+    call({ startDate, endDate, page, limit: pageSize })
+      .then((r) => { setEntries(r.data.data); setTotal(r.data.total); })
+      .catch(() => alert('Failed to load accounting data'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchPL(); }, []);
+  useEffect(() => { setPage(1); }, [book]);
+  useEffect(() => { fetchBook(); }, [book, page, pageSize]);
+
+  const applyDateFilter = () => { setPage(1); fetchPL(); fetchBook(); };
 
   return (
     <div className="page-content">
       <div style={{ marginBottom: 16 }}>
         <div className="section-title">Accounting</div>
-        <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>Financial overview and cash book</div>
+        <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>Financial overview, cash book, and bank book</div>
       </div>
 
       {/* Date Filter */}
@@ -41,7 +52,7 @@ export default function AccountingPage() {
           <label className="ab-label">To</label>
           <input className="ab-input" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: 160 }} />
         </div>
-        <button className="ab-btn ab-btn-primary" onClick={fetchData} disabled={loading}>
+        <button className="ab-btn ab-btn-primary" onClick={applyDateFilter} disabled={loading}>
           {loading ? 'Loading...' : 'Apply'}
         </button>
       </div>
@@ -67,16 +78,32 @@ export default function AccountingPage() {
         </div>
       )}
 
-      {/* Cash Book */}
+      {/* Book tabs */}
+      <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--rule)', marginBottom: 16 }}>
+        {(['cash', 'bank'] as Book[]).map((b) => (
+          <button
+            key={b}
+            onClick={() => setBook(b)}
+            style={{
+              padding: '8px 20px', border: 'none', background: 'none', cursor: 'pointer',
+              fontFamily: 'Oswald,sans-serif', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em',
+              color: book === b ? 'var(--safety-orange)' : 'var(--steel)',
+              borderBottom: book === b ? '2px solid var(--safety-orange)' : '2px solid transparent',
+              marginBottom: -2,
+            }}
+          >{b === 'cash' ? 'Cash Book' : 'Bank Book'}</button>
+        ))}
+      </div>
+
+      {/* Book */}
       <div className="panel">
-        <div className="panel-head" style={{ borderBottom: '1px solid var(--rule)', marginBottom: 12 }}>
-          <span className="section-title" style={{ fontSize: 13 }}>Cash Book</span>
-        </div>
-        {cashBook.length === 0 ? (
-          <div style={{ padding: 32, textAlign: 'center', color: 'var(--steel)', fontSize: 12, fontFamily: 'IBM Plex Mono,monospace' }}>No cash transactions for selected period</div>
+        {loading ? (
+          <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>Loading...</div>
+        ) : entries.length === 0 ? (
+          <div style={{ padding: 32, textAlign: 'center', color: 'var(--steel)', fontSize: 12, fontFamily: 'IBM Plex Mono,monospace' }}>No {book === 'cash' ? 'cash' : 'bank'} transactions for selected period</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {cashBook.map((txn) => (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 16 }}>
+            {entries.map((txn) => (
               <div key={txn.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)' }}>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 13 }}>{txn.transactionType}</div>
@@ -91,6 +118,9 @@ export default function AccountingPage() {
               </div>
             ))}
           </div>
+        )}
+        {!loading && entries.length > 0 && (
+          <Pagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
         )}
       </div>
     </div>

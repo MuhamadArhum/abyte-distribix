@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -8,17 +8,24 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('stats')
-  getStats() { return this.dashboardService.getStats(); }
+  getStats(
+    @Query('range') range?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Request() req?: any,
+  ) {
+    return this.dashboardService.getStats(req.user?.companyId, range, from, to);
+  }
 
   @Get('sales-chart')
-  getSalesChart() { return this.dashboardService.getSalesChart(); }
+  getSalesChart(@Request() req: any) { return this.dashboardService.getSalesChart(req.user?.companyId); }
 
   @Get('recent-sales')
-  getRecentSales() { return this.dashboardService.getRecentSales(); }
+  getRecentSales(@Request() req: any) { return this.dashboardService.getRecentSales(req.user?.companyId); }
 
   @Get('pending-purchases')
-  getPendingPurchases() { return this.dashboardService.getPendingPurchases(); }
+  getPendingPurchases(@Request() req: any) { return this.dashboardService.getPendingPurchases(req.user?.companyId); }
 
   @Get('top-debtors')
-  getTopDebtors() { return this.dashboardService.getTopDebtors(); }
+  getTopDebtors(@Request() req: any) { return this.dashboardService.getTopDebtors(req.user?.companyId); }
 }

@@ -2,6 +2,7 @@ import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron';
 import { spawn, ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 
 let mainWindow: BrowserWindow | null = null;
 let backendProcess: ChildProcess | null = null;
@@ -17,10 +18,47 @@ function ensureBackupDir() {
   if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
 }
 
+/**
+ * Generates a random JWT signing secret on first run and persists it in
+ * userData so tokens survive app restarts, but never ships a fixed/known
+ * value in the packaged app.
+ */
+function getOrCreateJwtSecret(): string {
+  const secretPath = path.join(app.getPath('userData'), 'jwt-secret.txt');
+  if (fs.existsSync(secretPath)) {
+    const existing = fs.readFileSync(secretPath, 'utf8').trim();
+    if (existing) return existing;
+  }
+  const generated = crypto.randomBytes(48).toString('hex');
+  fs.writeFileSync(secretPath, generated, { mode: 0o600 });
+  return generated;
+}
+
+/**
+ * On a genuinely fresh install, `dbPath` doesn't exist yet and SQLite would
+ * create an empty *file* with zero tables — every API call, including
+ * login, would then fail. Initialize it from the schema-only template
+ * database (no business data, no seed rows) that ships alongside the app,
+ * so a new customer's first launch actually works without developer help.
+ */
+function ensureDatabaseInitialized(backendPath: string): void {
+  if (fs.existsSync(dbPath)) return; // already initialized — never overwrite real data
+  const templatePath = path.join(backendPath, 'prisma', 'template.db');
+  if (!fs.existsSync(templatePath)) {
+    console.error(`[Backend] Cannot initialize database: template not found at ${templatePath}`);
+    return;
+  }
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+  fs.copyFileSync(templatePath, dbPath);
+  console.log(`[Backend] First launch — initialized empty database at ${dbPath}`);
+}
+
 function startBackend(): void {
   const backendPath = isDev
     ? path.join(__dirname, '../../backend')
     : path.join(process.resourcesPath, 'backend');
+
+  ensureDatabaseInitialized(backendPath);
 
   backendProcess = spawn('node', ['dist/main.js'], {
     cwd: backendPath,
@@ -28,6 +66,7 @@ function startBackend(): void {
       ...process.env,
       NODE_ENV: 'production',
       DATABASE_URL: `file:${dbPath}`,
+      JWT_SECRET: getOrCreateJwtSecret(),
     },
     stdio: 'pipe',
   });

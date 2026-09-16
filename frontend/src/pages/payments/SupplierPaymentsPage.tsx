@@ -1,38 +1,72 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { paymentsApi, suppliersApi, purchasesApi } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { usePagination } from '@/hooks/usePagination';
 import Pagination from '@/components/shared/Pagination';
+import { SearchPicker } from '@/components/shared/SearchPicker';
 import type { SupplierPayment, Supplier, Purchase } from '@/types';
 
 const METHODS = ['CASH', 'BANK', 'CHEQUE'];
-const today = new Date().toISOString().split('T')[0];
+const EMPTY_FORM = { paymentNumber: `SPAY-${Date.now()}`, supplierId: '', purchaseId: '', paymentDate: new Date().toISOString().split('T')[0], amount: 0, paymentMethod: 'CASH', reference: '', notes: '' };
+
+interface Summary { total: number; todayTotal: number; todayCount: number; allTotal: number }
 
 export default function SupplierPaymentsPage() {
   const [payments, setPayments] = useState<SupplierPayment[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    paymentNumber: `SPAY-${Date.now()}`, supplierId: '', purchaseId: '',
-    paymentDate: today,
-    amount: 0, paymentMethod: 'CASH', reference: '', notes: '',
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [supplierLabel, setSupplierLabel] = useState('');
+  const [supplierPurchases, setSupplierPurchases] = useState<Purchase[]>([]);
 
   // Filters
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [filterMethod, setFilterMethod] = useState('ALL');
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => { setPage(1); }, [search, filterMethod, startDate, endDate]);
+  useEffect(() => { load(); }, [search, filterMethod, startDate, endDate, page, pageSize]);
+  useEffect(() => { loadSummary(); }, []);
+
   const load = async () => {
+    setLoading(true);
     try {
-      const [p, s, pur] = await Promise.all([paymentsApi.getSupplierPayments(), suppliersApi.getAll(), purchasesApi.getAll()]);
-      setPayments(p.data); setSuppliers(s.data); setPurchases(pur.data);
+      const r = await paymentsApi.getSupplierPayments({
+        search: search || undefined,
+        method: filterMethod !== 'ALL' ? filterMethod : undefined,
+        from: startDate || undefined,
+        to: endDate || undefined,
+        page, limit: pageSize,
+      });
+      setPayments(r.data.data); setTotal(r.data.total);
     } catch { alert('Failed to load'); } finally { setLoading(false); }
+  };
+
+  const loadSummary = () => {
+    paymentsApi.getSupplierPaymentsSummary().then((r) => setSummary(r.data)).catch(() => { /* KPI row just stays blank */ });
+  };
+
+  const refreshAfterMutation = () => { load(); loadSummary(); };
+
+  const openAdd = () => { setForm({ ...EMPTY_FORM, paymentNumber: `SPAY-${Date.now()}` }); setSupplierLabel(''); setSupplierPurchases([]); setShowForm(true); };
+
+  const handleSelectSupplier = (s: Supplier) => {
+    setForm({ ...form, supplierId: s.id, purchaseId: '' });
+    setSupplierLabel(`${s.supplierName} — Balance: ${formatCurrency(s.currentBalance)}`);
+    purchasesApi.getAll({ supplierId: s.id, page: 1, limit: 50 })
+      .then((r) => setSupplierPurchases((r.data.data as Purchase[]).filter((p) => p.paymentStatus !== 'PAID')))
+      .catch(() => setSupplierPurchases([]));
   };
 
   const handleSave = async () => {
@@ -40,34 +74,16 @@ export default function SupplierPaymentsPage() {
     setSaving(true);
     try {
       await paymentsApi.createSupplierPayment(form);
-      setShowForm(false);
-      setForm({ paymentNumber: `SPAY-${Date.now()}`, supplierId: '', purchaseId: '', paymentDate: today, amount: 0, paymentMethod: 'CASH', reference: '', notes: '' });
-      const res = await paymentsApi.getSupplierPayments();
-      setPayments(res.data);
+      setShowForm(false); refreshAfterMutation();
     } catch (e: any) { alert(e.response?.data?.message || 'Failed'); } finally { setSaving(false); }
   };
 
-  const supplierPurchases = purchases.filter((p) => p.supplierId === form.supplierId && p.paymentStatus !== 'PAID');
+  const handleDelete = async (id: string, num: string) => {
+    if (!confirm(`Delete payment ${num}? This will restore the supplier's balance and reverse the cash/bank entry.`)) return;
+    try { await paymentsApi.deleteSupplierPayment(id); refreshAfterMutation(); } catch (e: any) { alert(e.response?.data?.message || 'Failed to delete'); }
+  };
 
-  const filtered = useMemo(() => {
-    return payments.filter((p) => {
-      const q = search.toLowerCase();
-      const matchSearch = !q || p.paymentNumber.toLowerCase().includes(q) || (p.supplier?.supplierName || '').toLowerCase().includes(q) || (p.reference || '').toLowerCase().includes(q);
-      const matchMethod = filterMethod === 'ALL' || p.paymentMethod === filterMethod;
-      const pDate = (p.paymentDate || '').split('T')[0];
-      const matchDate = pDate >= startDate && pDate <= endDate;
-      return matchSearch && matchMethod && matchDate;
-    });
-  }, [payments, search, filterMethod, startDate, endDate]);
-
-  // KPIs
-  const todayTotal = payments.filter((p) => (p.paymentDate || '').split('T')[0] === today).reduce((s, p) => s + p.amount, 0);
-  const todayCount = payments.filter((p) => (p.paymentDate || '').split('T')[0] === today).length;
-  const allTotal = payments.reduce((s, p) => s + p.amount, 0);
-  const filteredTotal = filtered.reduce((s, p) => s + p.amount, 0);
-  const filtersActive = search || filterMethod !== 'ALL' || startDate !== today || endDate !== today;
-
-  const { paged, page, pageSize, setPage, setPageSize } = usePagination(filtered);
+  const filtersActive = search || filterMethod !== 'ALL' || startDate || endDate;
 
   return (
     <div className="page-content">
@@ -75,23 +91,23 @@ export default function SupplierPaymentsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
         <div className="kpi-card red">
           <div className="kpi-top"><span className="kpi-label">Today's Payments</span></div>
-          <div className="kpi-value" style={{ fontSize: 18 }}>{formatCurrency(todayTotal)}</div>
-          <div className="kpi-sub">{todayCount} payments today</div>
+          <div className="kpi-value" style={{ fontSize: 18 }}>{formatCurrency(summary?.todayTotal ?? 0)}</div>
+          <div className="kpi-sub">{summary?.todayCount ?? 0} payments today</div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-top"><span className="kpi-label">Filtered Total</span></div>
-          <div className="kpi-value" style={{ fontSize: 18 }}>{formatCurrency(filteredTotal)}</div>
-          <div className="kpi-sub">{filtered.length} records shown</div>
+          <div className="kpi-top"><span className="kpi-label">Matching Total</span></div>
+          <div className="kpi-value" style={{ fontSize: 18 }}>{formatCurrency(payments.reduce((s, p) => s + p.amount, 0))}</div>
+          <div className="kpi-sub">This page ({payments.length} rows)</div>
         </div>
         <div className="kpi-card alt">
           <div className="kpi-top"><span className="kpi-label">All-Time Total</span></div>
-          <div className="kpi-value" style={{ fontSize: 18 }}>{formatCurrency(allTotal)}</div>
-          <div className="kpi-sub">{payments.length} total payments</div>
+          <div className="kpi-value" style={{ fontSize: 18 }}>{formatCurrency(summary?.allTotal ?? 0)}</div>
+          <div className="kpi-sub">{summary?.total ?? '—'} total payments</div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-top"><span className="kpi-label">Total Suppliers</span></div>
-          <div className="kpi-value">{suppliers.length}</div>
-          <div className="kpi-sub">Active suppliers</div>
+          <div className="kpi-top"><span className="kpi-label">Matching</span></div>
+          <div className="kpi-value">{total}</div>
+          <div className="kpi-sub">Under current filters</div>
         </div>
       </div>
 
@@ -99,9 +115,9 @@ export default function SupplierPaymentsPage() {
       <div className="panel-head" style={{ background: 'var(--paper-light)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)', marginBottom: 12 }}>
         <div>
           <div className="section-title">Supplier Payments</div>
-          <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>{filtered.length} of {payments.length} shown</div>
+          <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>{total} matching</div>
         </div>
-        <button className="ab-btn ab-btn-primary" onClick={() => setShowForm(true)}>
+        <button className="ab-btn ab-btn-primary" onClick={openAdd}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Record Payment
         </button>
@@ -109,7 +125,7 @@ export default function SupplierPaymentsPage() {
 
       {/* Filter Bar */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 12, padding: '12px 14px', background: 'var(--paper-light)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)' }}>
-        <input className="ab-input" placeholder="Search payment # or supplier..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: '1 1 200px', minWidth: 160 }} />
+        <input className="ab-input" placeholder="Search payment # or supplier..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} style={{ flex: '1 1 200px', minWidth: 160 }} />
         <select className="ab-input ab-select" value={filterMethod} onChange={(e) => setFilterMethod(e.target.value)} style={{ flex: '0 0 150px' }}>
           <option value="ALL">All Methods</option>
           {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
@@ -119,7 +135,7 @@ export default function SupplierPaymentsPage() {
         <span style={{ fontSize: 12, color: 'var(--steel)', whiteSpace: 'nowrap', alignSelf: 'center' }}>To</span>
         <input className="ab-input" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ flex: '0 0 140px' }} />
         {filtersActive && (
-          <button className="ab-btn ab-btn-outline" style={{ fontSize: 12 }} onClick={() => { setSearch(''); setFilterMethod('ALL'); setStartDate(today); setEndDate(today); }}>
+          <button className="ab-btn ab-btn-outline" style={{ fontSize: 12 }} onClick={() => { setSearchInput(''); setFilterMethod('ALL'); setStartDate(''); setEndDate(''); }}>
             Clear Filters
           </button>
         )}
@@ -129,7 +145,7 @@ export default function SupplierPaymentsPage() {
       <div className="panel">
         {loading ? (
           <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>Loading...</div>
-        ) : filtered.length === 0 ? (
+        ) : payments.length === 0 ? (
           <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>No payments found</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -143,10 +159,11 @@ export default function SupplierPaymentsPage() {
                   <th>Reference</th>
                   <th>Notes</th>
                   <th style={{ textAlign: 'right' }}>Amount</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
-                {paged.map((p) => (
+                {payments.map((p) => (
                   <tr key={p.id}>
                     <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600 }}>{p.paymentNumber}</span></td>
                     <td><span className="row-title">{p.supplier?.supplierName || '—'}</span></td>
@@ -155,14 +172,19 @@ export default function SupplierPaymentsPage() {
                     <td><span style={{ fontSize: 12, color: 'var(--steel)' }}>{p.reference || '—'}</span></td>
                     <td><span style={{ fontSize: 12, color: 'var(--steel)' }}>{p.notes || '—'}</span></td>
                     <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 13, fontWeight: 700, color: 'var(--blueprint)' }}>{formatCurrency(p.amount)}</span></td>
+                    <td>
+                      <button className="ab-btn ab-btn-icon danger" title="Delete / void" onClick={() => handleDelete(p.id, p.paymentNumber)}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-        {!loading && filtered.length > 0 && (
-          <Pagination total={filtered.length} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
+        {!loading && payments.length > 0 && (
+          <Pagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
         )}
       </div>
 
@@ -180,10 +202,19 @@ export default function SupplierPaymentsPage() {
                 <div><label className="ab-label">Payment Date</label><input className="ab-input" type="date" value={form.paymentDate} onChange={(e) => setForm({ ...form, paymentDate: e.target.value })} /></div>
                 <div className="span-2">
                   <label className="ab-label">Supplier *</label>
-                  <select className="ab-input ab-select" value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value, purchaseId: '' })}>
-                    <option value="">Select supplier</option>
-                    {suppliers.map((s) => <option key={s.id} value={s.id}>{s.supplierName} — Balance: {formatCurrency(s.currentBalance)}</option>)}
-                  </select>
+                  <SearchPicker<Supplier>
+                    value={form.supplierId}
+                    valueLabel={supplierLabel}
+                    placeholder="Type supplier name..."
+                    search={(q) => suppliersApi.getAll({ search: q, page: 1, limit: 8 }).then((r) => r.data.data)}
+                    onSelect={handleSelectSupplier}
+                    renderOption={(s) => (
+                      <div>
+                        <div className="row-title">{s.supplierName}</div>
+                        <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)' }}>Balance: {formatCurrency(s.currentBalance)}</div>
+                      </div>
+                    )}
+                  />
                 </div>
                 {form.supplierId && supplierPurchases.length > 0 && (
                   <div className="span-2">

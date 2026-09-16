@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { useCompanyStore } from '@/stores/companyStore';
 import { authApi } from '@/lib/api';
 
 export default function LoginPage() {
   const { isAuthenticated, login } = useAuthStore();
+  const { company, isSuperAdminLogin, clearCompany } = useCompanyStore();
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -13,13 +15,14 @@ export default function LoginPage() {
   const [error, setError] = useState('');
 
   if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+  if (!company && !isSuperAdminLogin) return <Navigate to="/select-company" replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username || !password) { setError('All fields required'); return; }
     setLoading(true); setError('');
     try {
-      const res = await authApi.login(username, password);
+      const res = await authApi.login(username, password, company?.id);
       const { access_token, user } = res.data;
       login(user, access_token);
       navigate('/dashboard');
@@ -34,6 +37,19 @@ export default function LoginPage() {
       setError('');
       alert('Admin user created: admin / admin123');
     } catch { setError('Seed failed'); }
+  };
+
+  const handleSeedSuperAdmin = async () => {
+    try {
+      await authApi.seedSuperAdmin();
+      setError('');
+      alert('Super-admin created: superadmin / superadmin123');
+    } catch { setError('Seed failed'); }
+  };
+
+  const handleChangeCompany = () => {
+    clearCompany();
+    navigate('/select-company');
   };
 
   return (
@@ -75,9 +91,26 @@ export default function LoginPage() {
           }}>
             Sign In
           </h2>
-          <p style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 11, color: 'var(--steel)', marginBottom: 22 }}>
+          <p style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 11, color: 'var(--steel)', marginBottom: 10 }}>
             Enter your credentials to access the system
           </p>
+
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '8px 12px', marginBottom: 16, background: 'rgba(0,0,0,0.03)',
+            border: '1px solid var(--rule)', borderRadius: 'var(--radius)',
+          }}>
+            <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 12, color: 'var(--ink)' }}>
+              {isSuperAdminLogin ? 'Super Admin Login' : company?.name}
+            </span>
+            <button
+              type="button"
+              onClick={handleChangeCompany}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'IBM Plex Mono, monospace', fontSize: 11, color: 'var(--safety-orange-deep)', textDecoration: 'underline' }}
+            >
+              Change
+            </button>
+          </div>
 
           {error && (
             <div style={{
@@ -178,14 +211,14 @@ export default function LoginPage() {
           <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--rule)', textAlign: 'center' }}>
             <button
               type="button"
-              onClick={handleSeed}
+              onClick={isSuperAdminLogin ? handleSeedSuperAdmin : handleSeed}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
                 fontFamily: 'IBM Plex Mono, monospace', fontSize: 11,
                 color: 'var(--safety-orange-deep)', textDecoration: 'underline',
               }}
             >
-              First time? Create default admin user
+              {isSuperAdminLogin ? 'First time? Create super-admin user' : 'First time? Create default admin user'}
             </button>
           </div>
         </div>

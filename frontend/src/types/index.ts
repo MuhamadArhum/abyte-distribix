@@ -5,6 +5,8 @@ export interface User {
   fullName: string;
   role: string;
   isActive: boolean;
+  companyId?: string | null;
+  isSuperAdmin?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -26,6 +28,17 @@ export interface Customer {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CustomerCylinderBalance {
+  id: string;
+  customerId: string;
+  cylinderTypeId: string;
+  filledQty: number;
+  emptyQty: number;
+  totalQty: number;
+  updatedAt: string;
+  cylinderType?: CylinderType;
 }
 
 export interface Supplier {
@@ -163,6 +176,29 @@ export interface SaleItem {
   totalPrice: number;
 }
 
+export interface SaleReturnItem {
+  id: string;
+  saleItemId: string;
+  cylinderTypeId: string;
+  cylinderType?: CylinderType;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
+export interface SaleReturn {
+  id: string;
+  returnNumber: string;
+  saleId: string;
+  customerId: string;
+  returnDate: string;
+  reason?: string;
+  totalAmount: number;
+  notes?: string;
+  createdAt: string;
+  items?: SaleReturnItem[];
+}
+
 export interface Sale {
   id: string;
   invoiceNumber: string;
@@ -179,6 +215,7 @@ export interface Sale {
   notes?: string;
   createdAt: string;
   saleItems?: SaleItem[];
+  saleReturns?: SaleReturn[];
 }
 
 export interface CustomerPayment {

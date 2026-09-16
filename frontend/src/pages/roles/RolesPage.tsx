@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { rolesApi } from '@/lib/api';
 import { toast } from 'sonner';
 import type { Role } from '@/types';
+import Pagination from '@/components/shared/Pagination';
 
 const ALL_PERMISSIONS = [
   { key: 'customers:read', label: 'View Customers' },
@@ -44,23 +45,38 @@ const ALL_PERMISSIONS = [
 const emptyForm = { name: '', description: '', permissions: [] as string[] };
 
 function parsePermissions(raw: string): string[] {
-  try { return JSON.parse(raw) || []; } catch { return []; }
+  try {
+    const arr = JSON.parse(raw) || [];
+    return Array.from(new Set(arr as string[]));
+  } catch { return []; }
 }
 
 export default function RolesPage() {
   const [roles, setRoles] = useState<Role[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editRole, setEditRole] = useState<Role | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => { setPage(1); }, [search]);
 
   const load = async () => {
     setLoading(true);
     try {
-      const res = await rolesApi.getAll();
-      setRoles(res.data);
+      const res = await rolesApi.getAll({ search: search || undefined, page, limit: pageSize });
+      setRoles(res.data.data); setTotal(res.data.total);
     } catch {
       toast.error('Failed to load roles');
     } finally {
@@ -68,7 +84,7 @@ export default function RolesPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [search, page, pageSize]);
 
   const openCreate = () => {
     setEditRole(null);
@@ -141,6 +157,17 @@ export default function RolesPage() {
 
   return (
     <div className="page-content">
+      <div style={{
+        display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 16,
+        padding: '10px 14px', background: 'var(--paper-light)', border: '1px solid var(--amber-warn)', borderRadius: 'var(--radius)',
+      }}>
+        <span style={{ color: 'var(--amber-warn)', fontWeight: 700 }}>!</span>
+        <div style={{ fontSize: 12, color: 'var(--ink)' }}>
+          <strong>Not yet enforced:</strong> the permission checkboxes below are saved but are not currently checked by the backend.
+          Actual access control is based on each user's system role (Admin / Manager / Accountant / Warehouse / Sales) under Users, not on the
+          custom permissions configured here.
+        </div>
+      </div>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <div className="section-title">Roles & Permissions</div>
@@ -152,6 +179,15 @@ export default function RolesPage() {
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           New Role
         </button>
+      </div>
+
+      {/* Filter Bar */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16, padding: '12px 14px', background: 'var(--paper-light)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)' }}>
+        <input className="ab-input" placeholder="Search by role name or description..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} style={{ flex: '1 1 220px', minWidth: 180 }} />
+        {searchInput && (
+          <button className="ab-btn ab-btn-outline" style={{ fontSize: 12 }} onClick={() => setSearchInput('')}>Clear</button>
+        )}
+        <span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', alignSelf: 'center', marginLeft: 'auto' }}>{total} matching</span>
       </div>
 
       {/* Form Modal */}
@@ -213,7 +249,7 @@ export default function RolesPage() {
         <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>Loading...</div>
       ) : roles.length === 0 ? (
         <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>
-          No roles defined. Create your first role.
+          {total === 0 ? 'No roles defined. Create your first role.' : 'No roles match your search.'}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -259,6 +295,12 @@ export default function RolesPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {!loading && roles.length > 0 && (
+        <div className="panel" style={{ marginTop: 16 }}>
+          <Pagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
         </div>
       )}
     </div>

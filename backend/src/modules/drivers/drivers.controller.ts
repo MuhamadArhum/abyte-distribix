@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
 import { DriversService } from './drivers.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -10,9 +10,19 @@ import { Roles } from '../../common/decorators/roles.decorator';
 export class DriversController {
   constructor(private readonly driversService: DriversService) {}
 
-  @Get() findAll() { return this.driversService.findAll(); }
-  @Get(':id') findOne(@Param('id') id: string) { return this.driversService.findOne(id); }
-  @Post() create(@Body() dto: any) { return this.driversService.create(dto); }
-  @Patch(':id') update(@Param('id') id: string, @Body() dto: any) { return this.driversService.update(id, dto); }
-  @Delete(':id') remove(@Param('id') id: string) { return this.driversService.remove(id); }
+  @Get()
+  findAll(
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Request() req?: any,
+  ) {
+    return this.driversService.findAll(req.user?.companyId, search, status, page !== undefined ? Number(page) : undefined, limit !== undefined ? Number(limit) : undefined);
+  }
+  @Get('summary') getSummary(@Request() req: any) { return this.driversService.getSummary(req.user?.companyId); }
+  @Get(':id') findOne(@Param('id') id: string, @Request() req: any) { return this.driversService.findOne(id, req.user?.companyId); }
+  @Post() create(@Body() dto: any, @Request() req: any) { return this.driversService.create(dto, req.user?.companyId); }
+  @Patch(':id') update(@Param('id') id: string, @Body() dto: any, @Request() req: any) { return this.driversService.update(id, dto, req.user?.companyId); }
+  @Delete(':id') remove(@Param('id') id: string, @Request() req: any) { return this.driversService.remove(id, req.user?.companyId); }
 }

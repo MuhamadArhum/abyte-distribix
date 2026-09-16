@@ -153,6 +153,16 @@ const navGroups: NavGroup[] = [
   },
 ];
 
+const superAdminGroup: NavGroup = {
+  title: 'Super Admin',
+  items: [
+    {
+      label: 'Companies', path: '/companies',
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 21h18M5 21V7l7-4 7 4v14"/><path d="M9 21V11h6v10"/></svg>,
+    },
+  ],
+};
+
 export function Sidebar() {
   const location = useLocation();
   const { mobileSidebarOpen } = useAppStore();
@@ -163,7 +173,8 @@ export function Sidebar() {
       ...group,
       items: group.items.filter((item) => canAccessPath(user?.role, item.path)),
     }))
-    .filter((group) => group.items.length > 0);
+    .filter((group) => group.items.length > 0)
+    .concat(user?.isSuperAdmin ? [superAdminGroup] : []);
 
   return (
     <aside className={`sidebar${mobileSidebarOpen ? ' mobile-open' : ''}`}>

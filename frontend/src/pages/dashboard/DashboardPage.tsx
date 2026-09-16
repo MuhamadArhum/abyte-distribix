@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { dashboardApi, cylindersApi, storageTanksApi } from '@/lib/api';
+import { dashboardApi, cylindersApi, storageTanksApi, gasProductsApi } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import type { Sale, Purchase, Customer, CylinderType, StorageTank } from '@/types';
+
+const REFRESH_INTERVAL_MS = 45000;
 
 function fillPct(filled: number, total: number) {
   if (!total) return 0;
@@ -17,6 +19,23 @@ function statusPill(pct: number) {
 
 function getInv(c: CylinderType, status: string) {
   return (c.cylinderInventory || []).find((i: any) => i.status === status)?.quantity || 0;
+}
+
+function periodLabel(rangeLabel: string | undefined, suffix: string) {
+  switch (rangeLabel) {
+    case 'This Week': return `This Week's ${suffix}`;
+    case 'This Month': return `This Month's ${suffix}`;
+    case 'Selected Period': return `Period ${suffix}`;
+    default: return `Today's ${suffix}`;
+  }
+}
+
+/* ── KPI trend pill (▲/▼ vs the previous equal-length period) ── */
+function TrendPill({ pct, invert }: { pct: number; invert?: boolean }) {
+  const good = invert ? pct <= 0 : pct >= 0;
+  const cls = pct === 0 ? 'warn' : good ? 'up' : 'down';
+  const arrow = pct > 0 ? '▲' : pct < 0 ? '▼' : '•';
+  return <span className={`kpi-trend ${cls}`}>{arrow} {Math.abs(pct).toFixed(1)}%</span>;
 }
 
 /* ── Mini SVG bar chart ── */
@@ -45,6 +64,8 @@ function SalesBarChart({ data }: { data: { label: string; value: number }[] }) {
   );
 }
 
+type RangeType = 'today' | 'week' | 'month' | 'custom';
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const [stats, setStats] = useState<any>(null);
@@ -54,18 +75,33 @@ export default function DashboardPage() {
   const [topDebtors, setTopDebtors] = useState<Customer[]>([]);
   const [cylinders, setCylinders] = useState<CylinderType[]>([]);
   const [tanks, setTanks] = useState<StorageTank[]>([]);
+  const [lowStockProducts, setLowStockProducts] = useState<{ id: string; productName: string; unit: string; minStockLevel: number; currentStock: number }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  useEffect(() => {
+  const [rangeType, setRangeType] = useState<RangeType>('today');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+
+  const loadDashboard = useCallback((background = false) => {
+    if (rangeType === 'custom' && !customFrom) return;
+    const rangeParams = rangeType === 'custom'
+      ? { range: 'custom', from: customFrom, to: customTo || customFrom }
+      : { range: rangeType };
+
+    if (!background) setLoading(true); else setRefreshing(true);
+
     Promise.allSettled([
-      dashboardApi.getStats(),
+      dashboardApi.getStats(rangeParams),
       dashboardApi.getSalesChart(),
       dashboardApi.getRecentSales(),
       dashboardApi.getPendingPurchases(),
       dashboardApi.getTopDebtors(),
-      cylindersApi.getAll(),
-      storageTanksApi.getAll(),
-    ]).then(([s, chart, sales, purch, cust, cyl, tank]) => {
+      cylindersApi.getAll({ limit: 20 }),
+      storageTanksApi.getAll({ limit: 20 }),
+      gasProductsApi.getLowStock(),
+    ]).then(([s, chart, sales, purch, cust, cyl, tank, lowStock]) => {
       if (s.status === 'fulfilled') setStats(s.value.data);
 
       if (chart.status === 'fulfilled') {
@@ -80,8 +116,25 @@ export default function DashboardPage() {
       if (cust.status === 'fulfilled') setTopDebtors(cust.value.data);
       if (cyl.status === 'fulfilled') setCylinders(cyl.value.data);
       if (tank.status === 'fulfilled') setTanks(tank.value.data);
-    }).finally(() => setLoading(false));
-  }, []);
+      if (lowStock.status === 'fulfilled') setLowStockProducts(lowStock.value.data);
+    }).finally(() => {
+      if (!background) setLoading(false); else setRefreshing(false);
+      setLastUpdated(new Date());
+    });
+  }, [rangeType, customFrom, customTo]);
+
+  useEffect(() => {
+    loadDashboard(false);
+  }, [loadDashboard]);
+
+  // Auto-refresh in the background so live stock/sales numbers don't go stale
+  // while the dashboard is left open; skipped while the tab isn't visible.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!document.hidden) loadDashboard(true);
+    }, REFRESH_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [loadDashboard]);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -92,6 +145,29 @@ export default function DashboardPage() {
     if (pct < 20) alerts.push({ level: 'high', title: `Low Gas Stock — ${t.tankName}`, sub: `Current: ${t.currentQuantity} KG · Capacity: ${t.capacity} KG (${Math.round(pct)}%)` });
     else if (pct < 40) alerts.push({ level: 'med', title: `Gas Level Warning — ${t.tankName}`, sub: `Current: ${t.currentQuantity} KG · ${Math.round(pct)}% remaining` });
   });
+  // Per cylinder-size low stock — mirrors the Optimal/Low Stock/Critical
+  // thresholds already used in the Cylinder Inventory table below.
+  cylinders.forEach((c) => {
+    const filled = getInv(c, 'FILLED');
+    const empty = getInv(c, 'EMPTY');
+    const total = filled + empty;
+    if (total === 0) return;
+    const pct = fillPct(filled, total);
+    if (pct < 25) alerts.push({ level: 'high', title: `Critical Cylinder Stock — ${c.cylinderSize}`, sub: `Only ${filled} filled of ${total} (${pct}%) — refill needed` });
+    else if (pct < 50) alerts.push({ level: 'med', title: `Low Cylinder Stock — ${c.cylinderSize}`, sub: `${filled} filled of ${total} (${pct}%)` });
+  });
+  // Capped so a large product catalog can't flood the alerts panel — worst
+  // shortfalls (by percent of minStockLevel) surface first, rest summarized.
+  const LOW_STOCK_ALERT_CAP = 5;
+  [...lowStockProducts]
+    .sort((a, b) => (a.currentStock / a.minStockLevel) - (b.currentStock / b.minStockLevel))
+    .slice(0, LOW_STOCK_ALERT_CAP)
+    .forEach((p) => {
+      alerts.push({ level: 'high', title: `Below Min Stock — ${p.productName}`, sub: `Current: ${p.currentStock} ${p.unit} · Minimum: ${p.minStockLevel} ${p.unit}` });
+    });
+  if (lowStockProducts.length > LOW_STOCK_ALERT_CAP) {
+    alerts.push({ level: 'med', title: `${lowStockProducts.length - LOW_STOCK_ALERT_CAP} more products below minimum stock`, sub: 'See Gas Products for the full list' });
+  }
   if (pendingPurchases.length > 0) {
     const total = pendingPurchases.reduce((s, p) => s + p.remainingAmount, 0);
     alerts.push({ level: 'med', title: `${pendingPurchases.length} Purchase${pendingPurchases.length > 1 ? 's' : ''} Pending Payment`, sub: `Total outstanding: ${formatCurrency(total)}` });
@@ -100,14 +176,15 @@ export default function DashboardPage() {
   if (overdueCustomers.length > 0) alerts.push({ level: 'high', title: `${overdueCustomers.length} Customer${overdueCustomers.length > 1 ? 's' : ''} Over Credit Limit`, sub: overdueCustomers.map((c) => c.businessName).join(', ') });
 
   const kpi = [
-    { label: 'Bulk Gas Stock', value: stats ? `${stats.bulkGasStock ?? 0} KG` : '—', sub: `${tanks.length} tank${tanks.length !== 1 ? 's' : ''} active`, cls: '' },
-    { label: "Today's Sales", value: formatCurrency(stats?.todaySales ?? 0), sub: 'Revenue today', cls: '' },
-    { label: 'Total Receivables', value: formatCurrency(stats?.totalReceivables ?? 0), sub: 'Outstanding from customers', cls: 'alt' },
-    { label: 'Total Payables', value: formatCurrency(stats?.totalPayables ?? 0), sub: 'Outstanding to suppliers', cls: 'alt' },
-    { label: 'Filled Cylinders', value: String(stats?.filledCylinders ?? cylinders.reduce((s, c) => s + getInv(c, 'FILLED'), 0)), sub: 'Ready for sale', cls: 'green' },
-    { label: 'Empty Cylinders', value: String(stats?.emptyCylinders ?? cylinders.reduce((s, c) => s + getInv(c, 'EMPTY'), 0)), sub: 'Awaiting filling', cls: '' },
-    { label: 'With Customers', value: String(stats?.cylindersWithCustomers ?? 0), sub: 'At customer sites', cls: 'alt' },
-    { label: "Today's Expenses", value: formatCurrency(stats?.todayExpenses ?? 0), sub: 'Costs today', cls: 'red' },
+    { label: 'Bulk Gas Stock', value: stats ? `${stats.bulkGasStock ?? 0} KG` : '—', sub: `${stats?.activeTanks ?? tanks.length} tank${(stats?.activeTanks ?? tanks.length) !== 1 ? 's' : ''} active`, cls: '', trend: null as React.ReactNode },
+    { label: periodLabel(stats?.rangeLabel, 'Sales'), value: formatCurrency(stats?.todaySales ?? 0), sub: 'Revenue for period', cls: '', trend: stats ? <TrendPill pct={stats.todaySalesChangePct ?? 0} /> : null },
+    { label: periodLabel(stats?.rangeLabel, 'Expenses'), value: formatCurrency(stats?.todayExpenses ?? 0), sub: 'Costs for period', cls: 'red', trend: stats ? <TrendPill pct={stats.todayExpensesChangePct ?? 0} invert /> : null },
+    { label: 'Total Receivables', value: formatCurrency(stats?.totalReceivables ?? 0), sub: 'Outstanding from customers', cls: 'alt', trend: null },
+    { label: 'Total Payables', value: formatCurrency(stats?.totalPayables ?? 0), sub: 'Outstanding to suppliers', cls: 'alt', trend: null },
+    { label: 'Filled Cylinders', value: String(stats?.filledCylinders ?? cylinders.reduce((s, c) => s + getInv(c, 'FILLED'), 0)), sub: 'Ready for sale', cls: 'green', trend: null },
+    { label: 'Empty Cylinders', value: String(stats?.emptyCylinders ?? cylinders.reduce((s, c) => s + getInv(c, 'EMPTY'), 0)), sub: 'Awaiting filling', cls: '', trend: null },
+    { label: 'With Customers', value: String(stats?.cylindersWithCustomers ?? 0), sub: 'At customer sites', cls: 'alt', trend: null },
+    { label: periodLabel(stats?.rangeLabel, 'Returns'), value: formatCurrency(stats?.periodReturnsAmount ?? 0), sub: `${stats?.periodReturnsCount ?? 0} return(s) · ${stats?.periodReturnRatePct ?? 0}% of sales`, cls: '', trend: null },
   ];
 
   if (loading) return <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>Loading dashboard...</div>;
@@ -115,11 +192,47 @@ export default function DashboardPage() {
   return (
     <div className="page-content">
 
+      {/* Period filter + refresh */}
+      <div className="panel" style={{ marginBottom: 16, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 10.5, color: 'var(--steel)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Period</span>
+        {(['today', 'week', 'month', 'custom'] as RangeType[]).map((r) => (
+          <button
+            key={r}
+            className={`ab-btn ${rangeType === r ? 'ab-btn-primary' : 'ab-btn-outline'}`}
+            style={{ fontSize: 11, padding: '4px 12px' }}
+            onClick={() => setRangeType(r)}
+          >
+            {r === 'today' ? 'Today' : r === 'week' ? 'This Week' : r === 'month' ? 'This Month' : 'Custom'}
+          </button>
+        ))}
+        {rangeType === 'custom' && (
+          <>
+            <input className="ab-input" type="date" value={customFrom} max={today} onChange={(e) => setCustomFrom(e.target.value)} style={{ width: 150 }} />
+            <span style={{ color: 'var(--steel)', fontSize: 12 }}>to</span>
+            <input className="ab-input" type="date" value={customTo} max={today} onChange={(e) => setCustomTo(e.target.value)} style={{ width: 150 }} />
+          </>
+        )}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 10.5, color: 'var(--steel)' }}>
+            {refreshing ? 'Refreshing…' : lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : ''}
+          </span>
+          <button className="ab-btn-icon" title="Refresh now" onClick={() => loadDashboard(true)} disabled={refreshing}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={refreshing ? { animation: 'spin 0.8s linear infinite' } : undefined}>
+              <path d="M23 4v6h-6M1 20v-6h6" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
       {/* KPI Row */}
       <div className="kpi-grid">
         {kpi.map((k, i) => (
           <div key={i} className={`kpi-card ${k.cls}`}>
-            <div className="kpi-top"><span className="kpi-label">{k.label}</span></div>
+            <div className="kpi-top">
+              <span className="kpi-label">{k.label}</span>
+              {k.trend}
+            </div>
             <div className="kpi-value">{k.value}</div>
             <div className="kpi-sub">{k.sub}</div>
           </div>

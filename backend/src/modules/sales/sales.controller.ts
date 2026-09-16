@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
@@ -12,10 +12,27 @@ import { Roles } from '../../common/decorators/roles.decorator';
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
-  @Get() findAll() { return this.salesService.findAll(); }
-  @Get(':id') findOne(@Param('id') id: string) { return this.salesService.findOne(id); }
-  @Post() create(@Body() dto: CreateSaleDto) { return this.salesService.create(dto); }
-  @Patch(':id') update(@Param('id') id: string, @Body() dto: UpdateSaleDto) { return this.salesService.update(id, dto); }
+  @Get()
+  findAll(
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('method') method?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Request() req?: any,
+  ) {
+    return this.salesService.findAll(req.user?.companyId, {
+      search, status, method, from, to,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+  @Get('summary') getSummary(@Request() req: any) { return this.salesService.getSummary(req.user?.companyId); }
+  @Get(':id') findOne(@Param('id') id: string, @Request() req: any) { return this.salesService.findOne(id, req.user?.companyId); }
+  @Post() create(@Body() dto: CreateSaleDto, @Request() req: any) { return this.salesService.create(dto, req.user?.companyId, req.user?.userId); }
+  @Patch(':id') update(@Param('id') id: string, @Body() dto: UpdateSaleDto, @Request() req: any) { return this.salesService.update(id, dto, req.user?.companyId); }
   @Roles('ADMIN', 'MANAGER')
-  @Delete(':id') remove(@Param('id') id: string) { return this.salesService.remove(id); }
+  @Delete(':id') remove(@Param('id') id: string, @Request() req: any) { return this.salesService.remove(id, req.user?.companyId, req.user?.userId); }
 }

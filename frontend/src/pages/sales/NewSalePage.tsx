@@ -1,41 +1,53 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { salesApi, customersApi, cylindersApi } from '@/lib/api';
+import { salesApi, customersApi, cylindersApi, settingsApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+import { SearchPicker } from '@/components/shared/SearchPicker';
 import type { Customer, CylinderType } from '@/types';
 
-interface SaleItemForm { cylinderTypeId: string; quantity: number; unitPrice: number; discount: number; }
+interface SaleItemForm { cylinderTypeId: string; cylinderLabel: string; quantity: number; unitPrice: number; discount: number; }
 
 export default function NewSalePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const prefilledCustomerId = searchParams.get('customerId') || '';
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [cylinderTypes, setCylinderTypes] = useState<CylinderType[]>([]);
   const [saving, setSaving] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customerLabel, setCustomerLabel] = useState('');
   const [form, setForm] = useState({
     invoiceNumber: `INV-${Date.now()}`, customerId: prefilledCustomerId,
     saleDate: new Date().toISOString().split('T')[0],
     discount: 0, paidAmount: 0, paymentMethod: 'CASH', notes: '',
   });
-  const [items, setItems] = useState<SaleItemForm[]>([{ cylinderTypeId: '', quantity: 1, unitPrice: 0, discount: 0 }]);
+  const [items, setItems] = useState<SaleItemForm[]>([{ cylinderTypeId: '', cylinderLabel: '', quantity: 1, unitPrice: 0, discount: 0 }]);
 
+  // Prefilled from "New Sale" on a customer's detail page — the picker
+  // needs the record itself (not just the id) to show a label and the
+  // credit-limit panel below.
   useEffect(() => {
-    Promise.all([customersApi.getAll(), cylindersApi.getAll()]).then(([c, cy]) => { setCustomers(c.data); setCylinderTypes(cy.data); });
+    if (!prefilledCustomerId) return;
+    customersApi.getOne(prefilledCustomerId).then((r) => { setSelectedCustomer(r.data); setCustomerLabel(r.data.businessName); }).catch(() => undefined);
+  }, [prefilledCustomerId]);
+
+  // Default invoice number honors the configured prefix (Settings ->
+  // Invoice Number Prefix) instead of a hardcoded "INV".
+  useEffect(() => {
+    settingsApi.getAll().then((r) => {
+      const prefix = (r.data as any[]).find((s) => s.key === 'invoice_prefix')?.value;
+      if (prefix) setForm((f) => ({ ...f, invoiceNumber: `${prefix}-${Date.now()}` }));
+    }).catch(() => undefined);
   }, []);
 
-  const selectedCustomer = useMemo(() => customers.find((c) => c.id === form.customerId), [customers, form.customerId]);
-
-  const addItem = () => setItems([...items, { cylinderTypeId: '', quantity: 1, unitPrice: 0, discount: 0 }]);
+  const addItem = () => setItems([...items, { cylinderTypeId: '', cylinderLabel: '', quantity: 1, unitPrice: 0, discount: 0 }]);
   const removeItem = (i: number) => setItems(items.filter((_, idx) => idx !== i));
   const updateItem = (i: number, field: keyof SaleItemForm, value: any) =>
     setItems(items.map((item, idx) => idx === i ? { ...item, [field]: value } : item));
 
-  const handleCylinderChange = (i: number, id: string) => {
-    const cyl = cylinderTypes.find((c) => c.id === id);
-    const prices = cyl?.sellingPrices ? JSON.parse(cyl.sellingPrices) : [];
+  const handleCylinderSelect = (i: number, cyl: CylinderType) => {
+    let prices: { priceType: string; price: number }[] = [];
+    try { prices = cyl.sellingPrices ? JSON.parse(cyl.sellingPrices) : []; } catch { prices = []; }
     const defaultPrice = prices[0]?.price || 0;
-    setItems(items.map((item, idx) => idx === i ? { ...item, cylinderTypeId: id, unitPrice: defaultPrice } : item));
+    setItems(items.map((item, idx) => idx === i ? { ...item, cylinderTypeId: cyl.id, cylinderLabel: cyl.cylinderSize, unitPrice: defaultPrice } : item));
   };
 
   const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice - item.discount), 0);
@@ -87,10 +99,19 @@ export default function NewSalePage() {
               </div>
               <div className="span-2">
                 <label className="ab-label">Customer *</label>
-                <select className="ab-input ab-select" value={form.customerId} onChange={(e) => setForm({ ...form, customerId: e.target.value })}>
-                  <option value="">Select customer</option>
-                  {customers.map((c) => <option key={c.id} value={c.id}>{c.businessName}</option>)}
-                </select>
+                <SearchPicker<Customer>
+                  value={form.customerId}
+                  valueLabel={customerLabel}
+                  placeholder="Type customer name..."
+                  search={(q) => customersApi.getAll({ search: q, page: 1, limit: 8 }).then((r) => r.data.data)}
+                  onSelect={(c) => { setForm({ ...form, customerId: c.id }); setSelectedCustomer(c); setCustomerLabel(c.businessName); }}
+                  renderOption={(c) => (
+                    <div>
+                      <div className="row-title">{c.businessName}</div>
+                      <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)' }}>{c.customerCode} · {c.customerType}</div>
+                    </div>
+                  )}
+                />
               </div>
               <div>
                 <label className="ab-label">Payment Method</label>
@@ -146,10 +167,14 @@ export default function NewSalePage() {
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 80px 120px 100px auto', gap: 8, alignItems: 'flex-end' }}>
                     <div>
                       <label className="ab-label" style={{ fontSize: 10 }}>Cylinder Type</label>
-                      <select className="ab-input ab-select" value={item.cylinderTypeId} onChange={(e) => handleCylinderChange(i, e.target.value)}>
-                        <option value="">Select</option>
-                        {cylinderTypes.map((c) => <option key={c.id} value={c.id}>{c.cylinderSize}</option>)}
-                      </select>
+                      <SearchPicker<CylinderType>
+                        value={item.cylinderTypeId}
+                        valueLabel={item.cylinderLabel}
+                        placeholder="Type cylinder size..."
+                        search={(q) => cylindersApi.getAll({ search: q, status: 'ACTIVE', page: 1, limit: 8 }).then((r) => r.data.data)}
+                        onSelect={(c) => handleCylinderSelect(i, c)}
+                        renderOption={(c) => <div className="row-title">{c.cylinderSize}</div>}
+                      />
                     </div>
                     <div>
                       <label className="ab-label" style={{ fontSize: 10 }}>Qty</label>

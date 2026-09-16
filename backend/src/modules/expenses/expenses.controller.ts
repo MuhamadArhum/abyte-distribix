@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
 import { ExpensesService } from './expenses.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { UpdateExpenseDto } from './dto/update-expense.dto';
@@ -12,10 +12,26 @@ import { Roles } from '../../common/decorators/roles.decorator';
 export class ExpensesController {
   constructor(private readonly expensesService: ExpensesService) {}
 
-  @Get() findAll() { return this.expensesService.findAll(); }
-  @Get('summary') getSummary() { return this.expensesService.getSummary(); }
-  @Get(':id') findOne(@Param('id') id: string) { return this.expensesService.findOne(id); }
-  @Post() create(@Body() dto: CreateExpenseDto) { return this.expensesService.create(dto); }
-  @Patch(':id') update(@Param('id') id: string, @Body() dto: UpdateExpenseDto) { return this.expensesService.update(id, dto); }
-  @Delete(':id') remove(@Param('id') id: string) { return this.expensesService.remove(id); }
+  @Get()
+  findAll(
+    @Query('search') search?: string,
+    @Query('category') category?: string,
+    @Query('method') method?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Request() req?: any,
+  ) {
+    return this.expensesService.findAll(req.user?.companyId, {
+      search, category, method, from, to,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+  @Get('summary') getSummary(@Request() req: any) { return this.expensesService.getSummary(req.user?.companyId); }
+  @Get(':id') findOne(@Param('id') id: string, @Request() req: any) { return this.expensesService.findOne(id, req.user?.companyId); }
+  @Post() create(@Body() dto: CreateExpenseDto, @Request() req: any) { return this.expensesService.create(dto, req.user?.companyId); }
+  @Patch(':id') update(@Param('id') id: string, @Body() dto: UpdateExpenseDto, @Request() req: any) { return this.expensesService.update(id, dto, req.user?.companyId); }
+  @Delete(':id') remove(@Param('id') id: string, @Request() req: any) { return this.expensesService.remove(id, req.user?.companyId); }
 }

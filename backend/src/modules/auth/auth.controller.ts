@@ -20,7 +20,13 @@ export class AuthController {
 
   @Post('seed')
   async seed() {
-    await this.authService.seedAdmin();
-    return { message: 'Seed completed' };
+    const result = await this.authService.seedAdmin();
+    return { message: result.seeded ? 'Default admin created' : 'No-op: users already exist', ...result };
+  }
+
+  @Post('seed-super-admin')
+  async seedSuperAdmin() {
+    const result = await this.authService.seedSuperAdmin();
+    return { message: result.seeded ? 'Super-admin created' : 'No-op: a super-admin already exists', ...result };
   }
 }

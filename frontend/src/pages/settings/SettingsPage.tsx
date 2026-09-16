@@ -154,17 +154,25 @@ export default function SettingsPage() {
             COMPANY INFORMATION
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {settings.map((setting) => (
-              <div key={setting.key}>
-                <label className="ab-label">{setting.description}</label>
-                <input
-                  className="ab-input"
-                  value={setting.value}
-                  placeholder={setting.description}
-                  onChange={(e) => setSettings(settings.map((s) => s.key === setting.key ? { ...s, value: e.target.value } : s))}
-                />
-              </div>
-            ))}
+            {settings.map((setting) => {
+              const notYetApplied = setting.key === 'tax_rate' || setting.key === 'currency';
+              return (
+                <div key={setting.key}>
+                  <label className="ab-label">{setting.description}</label>
+                  <input
+                    className="ab-input"
+                    value={setting.value}
+                    placeholder={setting.description}
+                    onChange={(e) => setSettings(settings.map((s) => s.key === setting.key ? { ...s, value: e.target.value } : s))}
+                  />
+                  {notYetApplied && (
+                    <div style={{ fontSize: 10, color: 'var(--amber-warn)', marginTop: 3, fontFamily: 'IBM Plex Mono,monospace' }}>
+                      Saved, but not yet applied to sale/report calculations
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end' }}>
             <button className="ab-btn ab-btn-primary" onClick={handleSave} disabled={saving}>
@@ -282,7 +290,7 @@ export default function SettingsPage() {
             )}
 
             <div style={{ marginTop: 12, fontSize: 10, color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', lineHeight: 1.6 }}>
-              Auto-backups are created on every app startup. Last 10 are kept automatically.
+              Auto-backups are created on every app startup. Last {dbInfo?.autoBackupRetention ?? 30} are kept automatically.
             </div>
           </div>
         </div>

@@ -14,6 +14,7 @@ import { InventoryModule } from './modules/inventory/inventory.module';
 import { CylindersModule } from './modules/cylinders/cylinders.module';
 import { FillingModule } from './modules/filling/filling.module';
 import { SalesModule } from './modules/sales/sales.module';
+import { SaleReturnsModule } from './modules/sale-returns/sale-returns.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
 import { AccountingModule } from './modules/accounting/accounting.module';
@@ -25,6 +26,7 @@ import { DriversModule } from './modules/drivers/drivers.module';
 import { VehiclesModule } from './modules/vehicles/vehicles.module';
 import { DeliveriesModule } from './modules/deliveries/deliveries.module';
 import { CylinderUnitsModule } from './modules/cylinder-units/cylinder-units.module';
+import { CompaniesModule } from './modules/companies/companies.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -45,6 +47,7 @@ import { PrismaModule } from './prisma/prisma.module';
     CylindersModule,
     FillingModule,
     SalesModule,
+    SaleReturnsModule,
     PaymentsModule,
     ExpensesModule,
     AccountingModule,
@@ -56,6 +59,7 @@ import { PrismaModule } from './prisma/prisma.module';
     VehiclesModule,
     DeliveriesModule,
     CylinderUnitsModule,
+    CompaniesModule,
   ],
 })
 export class AppModule {}

@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fillingApi, storageTanksApi, cylindersApi } from '@/lib/api';
+import { SearchPicker } from '@/components/shared/SearchPicker';
 import type { StorageTank, CylinderType } from '@/types';
 
 export default function NewFillingPage() {
   const navigate = useNavigate();
-  const [tanks, setTanks] = useState<StorageTank[]>([]);
-  const [cylinderTypes, setCylinderTypes] = useState<CylinderType[]>([]);
+  const [tankLabel, setTankLabel] = useState('');
+  const [cylinderLabel, setCylinderLabel] = useState('');
+  const [selectedCylinder, setSelectedCylinder] = useState<CylinderType | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     batchNumber: `FILL-${Date.now()}`,
@@ -15,18 +17,8 @@ export default function NewFillingPage() {
     fillingStation: '', notes: '',
   });
 
-  useEffect(() => {
-    Promise.all([storageTanksApi.getAll(), cylindersApi.getAll()]).then(([t, c]) => { setTanks(t.data); setCylinderTypes(c.data); });
-  }, []);
-
-  const handleCylinderChange = (id: string) => {
-    const cyl = cylinderTypes.find((c) => c.id === id);
-    setForm({ ...form, cylinderTypeId: id, expectedGasQty: cyl ? form.numberOfCylinders * cyl.gasCapacity : 0 });
-  };
-
   const handleCylinderCount = (count: number) => {
-    const cyl = cylinderTypes.find((c) => c.id === form.cylinderTypeId);
-    setForm({ ...form, numberOfCylinders: count, expectedGasQty: cyl ? count * cyl.gasCapacity : 0 });
+    setForm({ ...form, numberOfCylinders: count, expectedGasQty: selectedCylinder ? count * selectedCylinder.gasCapacity : 0 });
   };
 
   const handleSave = async () => {
@@ -66,17 +58,39 @@ export default function NewFillingPage() {
             </div>
             <div className="span-2">
               <label className="ab-label">Storage Tank *</label>
-              <select className="ab-input ab-select" value={form.tankId} onChange={(e) => setForm({ ...form, tankId: e.target.value })}>
-                <option value="">Select tank</option>
-                {tanks.map((t) => <option key={t.id} value={t.id}>{t.tankName} — {t.currentQuantity} KG available</option>)}
-              </select>
+              <SearchPicker<StorageTank>
+                value={form.tankId}
+                valueLabel={tankLabel}
+                placeholder="Type tank name or number..."
+                search={(q) => storageTanksApi.getAll({ search: q, status: 'ACTIVE', page: 1, limit: 8 }).then((r) => r.data.data)}
+                onSelect={(t) => { setForm({ ...form, tankId: t.id }); setTankLabel(`${t.tankName} — ${t.currentQuantity} KG available`); }}
+                renderOption={(t) => (
+                  <div>
+                    <div className="row-title">{t.tankName}</div>
+                    <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)' }}>{t.currentQuantity}/{t.capacity} KG</div>
+                  </div>
+                )}
+              />
             </div>
             <div className="span-2">
               <label className="ab-label">Cylinder Type *</label>
-              <select className="ab-input ab-select" value={form.cylinderTypeId} onChange={(e) => handleCylinderChange(e.target.value)}>
-                <option value="">Select cylinder type</option>
-                {cylinderTypes.map((c) => <option key={c.id} value={c.id}>{c.cylinderSize} ({c.gasCapacity} KG)</option>)}
-              </select>
+              <SearchPicker<CylinderType>
+                value={form.cylinderTypeId}
+                valueLabel={cylinderLabel}
+                placeholder="Type cylinder size..."
+                search={(q) => cylindersApi.getAll({ search: q, status: 'ACTIVE', page: 1, limit: 8 }).then((r) => r.data.data)}
+                onSelect={(c) => {
+                  setSelectedCylinder(c);
+                  setForm({ ...form, cylinderTypeId: c.id, expectedGasQty: form.numberOfCylinders * c.gasCapacity });
+                  setCylinderLabel(`${c.cylinderSize} (${c.gasCapacity} KG)`);
+                }}
+                renderOption={(c) => (
+                  <div>
+                    <div className="row-title">{c.cylinderSize}</div>
+                    <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)' }}>{c.gasCapacity} KG capacity</div>
+                  </div>
+                )}
+              />
             </div>
             <div>
               <label className="ab-label">Number of Cylinders *</label>

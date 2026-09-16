@@ -22,6 +22,13 @@ const PAGE_TITLES: Record<string, string> = {
   '/reports':           'Reports',
   '/users':             'Users',
   '/settings':          'Settings',
+  '/drivers':           'Drivers',
+  '/vehicles':          'Vehicles',
+  '/deliveries':        'Deliveries',
+  '/cylinder-units':    'Cylinder Units',
+  '/audit-logs':        'Audit Logs',
+  '/backup':            'Backup',
+  '/roles':             'Roles & Permissions',
 };
 
 const weekNum = Math.ceil(

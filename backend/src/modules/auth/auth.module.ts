@@ -9,8 +9,9 @@ import { JwtStrategy } from './jwt.strategy';
   imports: [
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'abyte-distribix-secret-key-2026',
-      signOptions: { expiresIn: '7d' },
+      // No hardcoded fallback: main.ts already refuses to boot if this is unset.
+      secret: process.env.JWT_SECRET as string,
+      signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '7d' },
     }),
   ],
   controllers: [AuthController],

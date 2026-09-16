@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { customersApi, paymentsApi } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import type { Customer, Sale, CustomerPayment } from '@/types';
+import { exportToPdf } from '@/lib/export';
+import type { Customer, Sale, CustomerPayment, CustomerCylinderBalance } from '@/types';
 
-type Tab = 'overview' | 'sales' | 'payments' | 'ledger';
+type Tab = 'overview' | 'sales' | 'payments' | 'cylinders' | 'ledger';
 
 const METHODS = ['CASH', 'BANK', 'CHEQUE', 'ONLINE'];
 
@@ -14,7 +15,7 @@ export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [customer, setCustomer] = useState<Customer & { sales?: Sale[]; customerPayments?: CustomerPayment[] } | null>(null);
+  const [customer, setCustomer] = useState<Customer & { sales?: Sale[]; customerPayments?: CustomerPayment[]; customerCylinderBals?: CustomerCylinderBalance[] } | null>(null);
   const [ledger, setLedger] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -68,16 +69,33 @@ export default function CustomerDetailPage() {
     finally { setPaymentSaving(false); }
   };
 
+  const handleExportStatement = async () => {
+    if (!customer) return;
+    const head = ['Date', 'Description', 'Type', 'Debit', 'Credit', 'Balance'];
+    const body = ledger.map((e: any) => [
+      e.date ? formatDate(e.date) : '—',
+      e.description || '—',
+      e.transactionType || '—',
+      e.debit > 0 ? formatCurrency(e.debit) : '—',
+      e.credit > 0 ? formatCurrency(e.credit) : '—',
+      formatCurrency(e.balance ?? 0),
+    ]);
+    await exportToPdf(`Statement-${customer.customerCode}`, `Customer Statement — ${customer.businessName}`, head, body);
+  };
+
   if (loading) return <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>Loading...</div>;
   if (!customer) return null;
 
   const totalSales = (customer.sales || []).reduce((s, x) => s + x.netTotal, 0);
   const totalPaid = (customer.sales || []).reduce((s, x) => s + x.paidAmount, 0);
   const outstanding = (customer.sales || []).reduce((s, x) => s + x.remainingAmount, 0);
+  const cylinderBals = customer.customerCylinderBals || [];
+  const totalDepositLiability = cylinderBals.reduce((s, b) => s + b.totalQty * (b.cylinderType?.depositAmount || 0), 0);
   const tabs: { key: Tab; label: string }[] = [
     { key: 'overview', label: 'Overview' },
     { key: 'sales', label: `Sales (${(customer.sales || []).length})` },
     { key: 'payments', label: `Payments (${(customer.customerPayments || []).length})` },
+    { key: 'cylinders', label: `Cylinders (${cylinderBals.length})` },
     { key: 'ledger', label: `Ledger (${ledger.length})` },
   ];
 
@@ -321,9 +339,59 @@ export default function CustomerDetailPage() {
         </div>
       )}
 
+      {/* Tab: Cylinders */}
+      {activeTab === 'cylinders' && (
+        <div className="panel" style={{ padding: 20 }}>
+          {cylinderBals.length === 0 ? (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--steel)', fontSize: 12, fontFamily: 'IBM Plex Mono,monospace' }}>No cylinders currently with this customer</div>
+          ) : (
+            <>
+              <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)', display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--steel)' }}>Total Deposit Liability</span>
+                <span style={{ fontFamily: 'IBM Plex Mono,monospace', fontWeight: 700, color: 'var(--amber-warn)' }}>{formatCurrency(totalDepositLiability)}</span>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Cylinder Size</th>
+                      <th style={{ textAlign: 'right' }}>Filled</th>
+                      <th style={{ textAlign: 'right' }}>Empty</th>
+                      <th style={{ textAlign: 'right' }}>Total</th>
+                      <th style={{ textAlign: 'right' }}>Deposit / Unit</th>
+                      <th style={{ textAlign: 'right' }}>Deposit Liability</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cylinderBals.map((b) => (
+                      <tr key={b.id}>
+                        <td><span className="row-title">{b.cylinderType?.cylinderSize || '—'}</span></td>
+                        <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, color: 'var(--green-ok)', fontWeight: 600 }}>{b.filledQty}</span></td>
+                        <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{b.emptyQty}</span></td>
+                        <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 700 }}>{b.totalQty}</span></td>
+                        <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, color: 'var(--steel)' }}>{formatCurrency(b.cylinderType?.depositAmount || 0)}</span></td>
+                        <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 700, color: 'var(--amber-warn)' }}>{formatCurrency(b.totalQty * (b.cylinderType?.depositAmount || 0))}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Tab: Ledger */}
       {activeTab === 'ledger' && (
         <div className="panel" style={{ padding: 20 }}>
+          {ledger.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+              <button className="ab-btn ab-btn-outline" style={{ fontSize: 11 }} onClick={handleExportStatement}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+                Export Statement (PDF)
+              </button>
+            </div>
+          )}
           {ledger.length === 0 ? (
             <div style={{ padding: 40, textAlign: 'center', color: 'var(--steel)', fontSize: 12, fontFamily: 'IBM Plex Mono,monospace' }}>No ledger entries</div>
           ) : (

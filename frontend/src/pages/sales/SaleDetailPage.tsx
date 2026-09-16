@@ -1,19 +1,70 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { salesApi } from '@/lib/api';
+import { salesApi, saleReturnsApi } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import type { Sale } from '@/types';
+import { toast } from 'sonner';
 
 export default function SaleDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [sale, setSale] = useState<Sale | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showReturn, setShowReturn] = useState(false);
+  const [returnQty, setReturnQty] = useState<Record<string, number>>({});
+  const [returnReason, setReturnReason] = useState('');
+  const [submittingReturn, setSubmittingReturn] = useState(false);
 
-  useEffect(() => {
+  const load = () => {
     if (!id) return;
     salesApi.getOne(id).then((r) => setSale(r.data)).catch(() => navigate('/sales')).finally(() => setLoading(false));
-  }, [id]);
+  };
+
+  useEffect(() => { load(); }, [id]);
+
+  const alreadyReturnedByItem = React.useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const ret of sale?.saleReturns || []) {
+      for (const it of ret.items || []) {
+        map[it.saleItemId] = (map[it.saleItemId] || 0) + it.quantity;
+      }
+    }
+    return map;
+  }, [sale]);
+
+  const openReturn = () => {
+    const init: Record<string, number> = {};
+    (sale?.saleItems || []).forEach((it) => { init[it.id] = 0; });
+    setReturnQty(init);
+    setReturnReason('');
+    setShowReturn(true);
+  };
+
+  const submitReturn = async () => {
+    if (!sale) return;
+    const items = Object.entries(returnQty)
+      .filter(([, qty]) => qty > 0)
+      .map(([saleItemId, quantity]) => ({ saleItemId, quantity }));
+    if (items.length === 0) { toast.error('Enter a return quantity for at least one item'); return; }
+
+    setSubmittingReturn(true);
+    try {
+      await saleReturnsApi.create({
+        returnNumber: `RET-${Date.now()}`,
+        saleId: sale.id,
+        returnDate: new Date().toISOString(),
+        reason: returnReason || undefined,
+        items,
+      });
+      toast.success('Return recorded — stock and customer balance updated');
+      setShowReturn(false);
+      load();
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Failed to record return');
+    } finally {
+      setSubmittingReturn(false);
+    }
+  };
 
   if (loading) return <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>Loading...</div>;
   if (!sale) return null;
@@ -39,6 +90,9 @@ export default function SaleDetailPage() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span className={`pill ${statusClass}`} style={{ fontSize: 12, padding: '4px 12px' }}>{sale.paymentStatus}</span>
+          <button className="ab-btn ab-btn-outline" onClick={openReturn}>
+            Return Items
+          </button>
           <button className="ab-btn ab-btn-outline" onClick={() => window.print()}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
             Print
@@ -162,6 +216,59 @@ export default function SaleDetailPage() {
           </div>
         </div>
       </div>
+
+      {showReturn && (
+        <div className="ab-modal-overlay" onClick={() => setShowReturn(false)}>
+          <div className="ab-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ab-modal-head">
+              <span className="ab-modal-title">Return Items — {sale.invoiceNumber}</span>
+              <button className="ab-btn ab-btn-icon" onClick={() => setShowReturn(false)}>✕</button>
+            </div>
+            <div className="ab-modal-body">
+              <table className="data-table">
+                <thead>
+                  <tr><th>Cylinder</th><th style={{ textAlign: 'right' }}>Sold</th><th style={{ textAlign: 'right' }}>Already Returned</th><th style={{ textAlign: 'right' }}>Return Qty</th></tr>
+                </thead>
+                <tbody>
+                  {(sale.saleItems || []).map((item) => {
+                    const returned = alreadyReturnedByItem[item.id] || 0;
+                    const max = item.quantity - returned;
+                    return (
+                      <tr key={item.id}>
+                        <td>{item.cylinderType?.cylinderSize || '—'}</td>
+                        <td style={{ textAlign: 'right' }}>{item.quantity}</td>
+                        <td style={{ textAlign: 'right' }}>{returned}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          <input
+                            className="ab-input"
+                            type="number"
+                            min={0}
+                            max={max}
+                            value={returnQty[item.id] || 0}
+                            onChange={(e) => setReturnQty((q) => ({ ...q, [item.id]: Math.max(0, Math.min(max, Number(e.target.value))) }))}
+                            style={{ width: 80, textAlign: 'right' }}
+                            disabled={max <= 0}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div style={{ marginTop: 14 }}>
+                <label className="ab-label">Reason (optional)</label>
+                <input className="ab-input" value={returnReason} onChange={(e) => setReturnReason(e.target.value)} placeholder="e.g. Customer changed order" />
+              </div>
+            </div>
+            <div className="ab-modal-foot">
+              <button className="ab-btn ab-btn-outline" onClick={() => setShowReturn(false)}>Cancel</button>
+              <button className="ab-btn ab-btn-primary" onClick={submitReturn} disabled={submittingReturn}>
+                {submittingReturn ? 'Processing...' : 'Confirm Return'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

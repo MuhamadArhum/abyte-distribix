@@ -1,74 +1,102 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { cylindersApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
-import { usePagination } from '@/hooks/usePagination';
 import Pagination from '@/components/shared/Pagination';
 import type { CylinderType } from '@/types';
 
-const EMPTY = { cylinderSize: '', gasCapacity: 0, emptyWeight: 0, depositAmount: 0 };
+const PRICE_TYPES = ['RETAIL', 'DEALER', 'COMMERCIAL', 'INDIVIDUAL'];
+const EMPTY_PRICES = PRICE_TYPES.map((priceType) => ({ priceType, price: 0 }));
+const EMPTY = { cylinderSize: '', gasCapacity: 0, emptyWeight: 0, depositAmount: 0, sellingPrices: EMPTY_PRICES };
+
+interface Summary { total: number; active: number; inactive: number; totalFilled: number; totalEmpty: number; totalDeposit: number }
+
+/** Merges saved prices onto the full PRICE_TYPES list so the editor always
+ * shows all four rows, even for cylinder types saved before a type existed. */
+function parseSellingPrices(raw: string | undefined): { priceType: string; price: number }[] {
+  let saved: { priceType: string; price: number }[] = [];
+  try { saved = raw ? JSON.parse(raw) : []; } catch { saved = []; }
+  return PRICE_TYPES.map((priceType) => ({ priceType, price: saved.find((p) => p.priceType === priceType)?.price ?? 0 }));
+}
 
 export default function CylindersPage() {
   const [cylinders, setCylinders] = useState<CylinderType[]>([]);
+  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(EMPTY);
+
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => { setPage(1); }, [search, filterStatus]);
+  useEffect(() => { load(); }, [search, filterStatus, page, pageSize]);
+  useEffect(() => { loadSummary(); }, []);
+
   const load = async () => {
-    try { const r = await cylindersApi.getAll(); setCylinders(r.data); }
-    catch { alert('Failed to load'); } finally { setLoading(false); }
+    setLoading(true);
+    try {
+      const r = await cylindersApi.getAll({
+        search: search || undefined,
+        status: filterStatus !== 'ALL' ? filterStatus : undefined,
+        page, limit: pageSize,
+      });
+      setCylinders(r.data.data);
+      setTotal(r.data.total);
+    } catch { alert('Failed to load'); } finally { setLoading(false); }
   };
+
+  const loadSummary = async () => {
+    try { const r = await cylindersApi.getSummary(); setSummary(r.data); } catch { /* KPI row just stays blank */ }
+  };
+
+  const refreshAfterMutation = () => { load(); loadSummary(); };
 
   const openAdd = () => { setEditId(null); setForm(EMPTY); setShowForm(true); };
   const openEdit = (c: CylinderType) => {
     setEditId(c.id);
-    setForm({ cylinderSize: c.cylinderSize, gasCapacity: c.gasCapacity, emptyWeight: c.emptyWeight, depositAmount: c.depositAmount });
+    setForm({ cylinderSize: c.cylinderSize, gasCapacity: c.gasCapacity, emptyWeight: c.emptyWeight, depositAmount: c.depositAmount, sellingPrices: parseSellingPrices(c.sellingPrices) });
     setShowForm(true);
+  };
+
+  const updatePrice = (priceType: string, price: number) => {
+    setForm({ ...form, sellingPrices: form.sellingPrices.map((p) => p.priceType === priceType ? { ...p, price } : p) });
   };
 
   const handleSave = async () => {
     if (!form.cylinderSize) { alert('Cylinder size required'); return; }
     setSaving(true);
     try {
-      if (editId) await cylindersApi.update(editId, form);
-      else await cylindersApi.create(form);
-      setShowForm(false); load();
+      const payload = { ...form, sellingPrices: JSON.stringify(form.sellingPrices) };
+      if (editId) await cylindersApi.update(editId, payload);
+      else await cylindersApi.create(payload);
+      setShowForm(false); refreshAfterMutation();
     } catch (e: any) { alert(e.response?.data?.message || 'Failed'); } finally { setSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this cylinder type?')) return;
-    try { await cylindersApi.delete(id); load(); } catch { alert('Failed'); }
+    try { await cylindersApi.delete(id); refreshAfterMutation(); } catch { alert('Failed'); }
   };
 
   const handleToggleStatus = async (c: CylinderType) => {
-    try { await cylindersApi.update(c.id, { status: c.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' }); load(); }
+    try { await cylindersApi.update(c.id, { status: c.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' }); refreshAfterMutation(); }
     catch { alert('Failed to update status'); }
   };
 
   const getInv = (c: CylinderType, status: string) => (c.cylinderInventory || []).find((i: any) => i.status === status)?.quantity || 0;
 
-  // KPIs
-  const activeCount = cylinders.filter((c) => c.status === 'ACTIVE').length;
-  const totalFilled = cylinders.reduce((s, c) => s + getInv(c, 'FILLED'), 0);
-  const totalEmpty = cylinders.reduce((s, c) => s + getInv(c, 'EMPTY'), 0);
-  const totalDeposit = cylinders.reduce((s, c) => s + c.depositAmount * (getInv(c, 'FILLED') + getInv(c, 'EMPTY')), 0);
-
-  const filtered = useMemo(() => {
-    return cylinders.filter((c) => {
-      const matchSearch = !search || c.cylinderSize.toLowerCase().includes(search.toLowerCase());
-      const matchStatus = filterStatus === 'ALL' || c.status === filterStatus;
-      return matchSearch && matchStatus;
-    });
-  }, [cylinders, search, filterStatus]);
-
   const filtersActive = search || filterStatus !== 'ALL';
-
-  const { paged, page, pageSize, setPage, setPageSize } = usePagination(filtered);
 
   return (
     <div className="page-content">
@@ -76,22 +104,22 @@ export default function CylindersPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
         <div className="kpi-card">
           <div className="kpi-top"><span className="kpi-label">Total Types</span></div>
-          <div className="kpi-value">{cylinders.length}</div>
-          <div className="kpi-sub">{activeCount} active</div>
+          <div className="kpi-value">{summary?.total ?? '—'}</div>
+          <div className="kpi-sub">{summary?.active ?? '—'} active</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-top"><span className="kpi-label">Total Filled</span></div>
-          <div className="kpi-value" style={{ color: 'var(--green-ok)' }}>{totalFilled}</div>
+          <div className="kpi-value" style={{ color: 'var(--green-ok)' }}>{summary?.totalFilled ?? '—'}</div>
           <div className="kpi-sub">Cylinders ready to sell</div>
         </div>
         <div className="kpi-card alt">
           <div className="kpi-top"><span className="kpi-label">Total Empty</span></div>
-          <div className="kpi-value" style={{ color: 'var(--amber-warn)' }}>{totalEmpty}</div>
+          <div className="kpi-value" style={{ color: 'var(--amber-warn)' }}>{summary?.totalEmpty ?? '—'}</div>
           <div className="kpi-sub">Awaiting filling</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-top"><span className="kpi-label">Deposit Value</span></div>
-          <div className="kpi-value" style={{ fontSize: 18 }}>{formatCurrency(totalDeposit)}</div>
+          <div className="kpi-value" style={{ fontSize: 18 }}>{formatCurrency(summary?.totalDeposit ?? 0)}</div>
           <div className="kpi-sub">All cylinders in stock</div>
         </div>
       </div>
@@ -100,7 +128,7 @@ export default function CylindersPage() {
       <div className="panel-head" style={{ background: 'var(--paper-light)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)', marginBottom: 12 }}>
         <div>
           <div className="section-title">Cylinders</div>
-          <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>{filtered.length} of {cylinders.length} types</div>
+          <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>{total} matching</div>
         </div>
         <button className="ab-btn ab-btn-primary" onClick={openAdd}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -110,14 +138,14 @@ export default function CylindersPage() {
 
       {/* Filter Bar */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 12, padding: '12px 14px', background: 'var(--paper-light)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)' }}>
-        <input className="ab-input" placeholder="Search by size..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: '1 1 200px', minWidth: 160 }} />
+        <input className="ab-input" placeholder="Search by size..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} style={{ flex: '1 1 200px', minWidth: 160 }} />
         <select className="ab-input ab-select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ flex: '0 0 150px' }}>
           <option value="ALL">All Status</option>
           <option value="ACTIVE">Active</option>
           <option value="INACTIVE">Inactive</option>
         </select>
         {filtersActive && (
-          <button className="ab-btn ab-btn-outline" style={{ fontSize: 12 }} onClick={() => { setSearch(''); setFilterStatus('ALL'); }}>
+          <button className="ab-btn ab-btn-outline" style={{ fontSize: 12 }} onClick={() => { setSearchInput(''); setFilterStatus('ALL'); }}>
             Clear Filters
           </button>
         )}
@@ -127,56 +155,65 @@ export default function CylindersPage() {
       <div className="panel">
         {loading ? (
           <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>Loading...</div>
-        ) : filtered.length === 0 ? (
+        ) : cylinders.length === 0 ? (
           <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>No cylinder types found</div>
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Size</th>
-                <th style={{ textAlign: 'right' }}>Gas Cap.</th>
-                <th style={{ textAlign: 'right' }}>Empty Wt.</th>
-                <th style={{ textAlign: 'right' }}>Deposit</th>
-                <th style={{ textAlign: 'right' }}>Filled</th>
-                <th style={{ textAlign: 'right' }}>Empty</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {paged.map((c) => {
-                const filled = getInv(c, 'FILLED');
-                const empty = getInv(c, 'EMPTY');
-                return (
-                  <tr key={c.id}>
-                    <td><span className="row-title">{c.cylinderSize}</span></td>
-                    <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{c.gasCapacity} KG</span></td>
-                    <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{c.emptyWeight} KG</span></td>
-                    <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{formatCurrency(c.depositAmount)}</span></td>
-                    <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600, color: 'var(--green-ok)' }}>{filled}</span></td>
-                    <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, color: empty > 0 ? 'var(--amber-warn)' : 'var(--steel)' }}>{empty}</span></td>
-                    <td><span className={`pill ${c.status === 'ACTIVE' ? 'pill-green' : 'pill-steel'}`}>{c.status}</span></td>
-                    <td>
-                      <div className="row-actions">
-                        <button className="ab-btn ab-btn-icon" title="Edit" onClick={() => openEdit(c)}>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                        </button>
-                        <button className="ab-btn ab-btn-icon" title={c.status === 'ACTIVE' ? 'Deactivate' : 'Activate'} onClick={() => handleToggleStatus(c)} style={{ color: c.status === 'ACTIVE' ? 'var(--amber-warn)' : 'var(--green-ok)' }}>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
-                        </button>
-                        <button className="ab-btn ab-btn-icon danger" title="Delete" onClick={() => handleDelete(c.id)}>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Size</th>
+                  <th style={{ textAlign: 'right' }}>Gas Cap.</th>
+                  <th style={{ textAlign: 'right' }}>Empty Wt.</th>
+                  <th style={{ textAlign: 'right' }}>Deposit</th>
+                  <th>Retail Price</th>
+                  <th style={{ textAlign: 'right' }}>Filled</th>
+                  <th style={{ textAlign: 'right' }}>Empty</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {cylinders.map((c) => {
+                  const filled = getInv(c, 'FILLED');
+                  const empty = getInv(c, 'EMPTY');
+                  const retailPrice = parseSellingPrices(c.sellingPrices).find((p) => p.priceType === 'RETAIL')?.price || 0;
+                  return (
+                    <tr key={c.id}>
+                      <td><span className="row-title">{c.cylinderSize}</span></td>
+                      <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{c.gasCapacity} KG</span></td>
+                      <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{c.emptyWeight} KG</span></td>
+                      <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{formatCurrency(c.depositAmount)}</span></td>
+                      <td>
+                        {retailPrice > 0
+                          ? <span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, color: 'var(--green-ok)', fontWeight: 600 }}>{formatCurrency(retailPrice)}</span>
+                          : <span className="pill pill-red" style={{ fontSize: 10 }}>NOT SET</span>}
+                      </td>
+                      <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600, color: 'var(--green-ok)' }}>{filled}</span></td>
+                      <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, color: empty > 0 ? 'var(--amber-warn)' : 'var(--steel)' }}>{empty}</span></td>
+                      <td><span className={`pill ${c.status === 'ACTIVE' ? 'pill-green' : 'pill-steel'}`}>{c.status}</span></td>
+                      <td>
+                        <div className="row-actions">
+                          <button className="ab-btn ab-btn-icon" title="Edit" onClick={() => openEdit(c)}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          </button>
+                          <button className="ab-btn ab-btn-icon" title={c.status === 'ACTIVE' ? 'Deactivate' : 'Activate'} onClick={() => handleToggleStatus(c)} style={{ color: c.status === 'ACTIVE' ? 'var(--amber-warn)' : 'var(--green-ok)' }}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                          </button>
+                          <button className="ab-btn ab-btn-icon danger" title="Delete" onClick={() => handleDelete(c.id)}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
-        {!loading && filtered.length > 0 && (
-          <Pagination total={filtered.length} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
+        {!loading && cylinders.length > 0 && (
+          <Pagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
         )}
       </div>
 
@@ -194,6 +231,18 @@ export default function CylindersPage() {
                 <div><label className="ab-label">Gas Capacity (KG)</label><input className="ab-input" type="number" value={form.gasCapacity} onChange={(e) => setForm({ ...form, gasCapacity: Number(e.target.value) })} /></div>
                 <div><label className="ab-label">Empty Weight (KG)</label><input className="ab-input" type="number" value={form.emptyWeight} onChange={(e) => setForm({ ...form, emptyWeight: Number(e.target.value) })} /></div>
                 <div className="span-2"><label className="ab-label">Deposit Amount (PKR)</label><input className="ab-input" type="number" value={form.depositAmount} onChange={(e) => setForm({ ...form, depositAmount: Number(e.target.value) })} /></div>
+              </div>
+
+              <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--rule)' }}>
+                <label className="ab-label" style={{ display: 'block', marginBottom: 8 }}>Selling Prices (PKR) — used to auto-fill the unit price on a Sale</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  {form.sellingPrices.map((p) => (
+                    <div key={p.priceType}>
+                      <label className="ab-label" style={{ fontSize: 11 }}>{p.priceType}</label>
+                      <input className="ab-input" type="number" value={p.price} onChange={(e) => updatePrice(p.priceType, Number(e.target.value))} />
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="ab-modal-foot">

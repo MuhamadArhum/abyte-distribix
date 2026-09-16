@@ -5,6 +5,8 @@ import { AppLayout } from '@/components/layout/AppLayout';
 
 // Lazy load pages
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
+const CompanySelectorPage = lazy(() => import('@/pages/auth/CompanySelectorPage'));
+const CompaniesPage = lazy(() => import('@/pages/companies/CompaniesPage'));
 const DashboardPage = lazy(() => import('@/pages/dashboard/DashboardPage'));
 const CustomersPage = lazy(() => import('@/pages/customers/CustomersPage'));
 const CustomerDetailPage = lazy(() => import('@/pages/customers/CustomerDetailPage'));
@@ -31,7 +33,9 @@ const ReportsPage = lazy(() => import('@/pages/reports/ReportsPage'));
 const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage'));
 const UsersPage = lazy(() => import('@/pages/users/UsersPage'));
 const DriversPage = lazy(() => import('@/pages/drivers/DriversPage'));
+const DriverDetailPage = lazy(() => import('@/pages/drivers/DriverDetailPage'));
 const VehiclesPage = lazy(() => import('@/pages/vehicles/VehiclesPage'));
+const VehicleDetailPage = lazy(() => import('@/pages/vehicles/VehicleDetailPage'));
 const DeliveriesPage = lazy(() => import('@/pages/deliveries/DeliveriesPage'));
 const CylinderUnitsPage = lazy(() => import('@/pages/cylinder-units/CylinderUnitsPage'));
 const AuditLogsPage = lazy(() => import('@/pages/audit-logs/AuditLogsPage'));
@@ -52,8 +56,10 @@ export default function App() {
       <Toaster position="top-right" richColors closeButton />
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
+          <Route path="/select-company" element={<CompanySelectorPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<AppLayout />}>
+            <Route path="companies" element={<CompaniesPage />} />
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="customers" element={<CustomersPage />} />
@@ -81,7 +87,9 @@ export default function App() {
             <Route path="settings" element={<SettingsPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="drivers" element={<DriversPage />} />
+            <Route path="drivers/:id" element={<DriverDetailPage />} />
             <Route path="vehicles" element={<VehiclesPage />} />
+            <Route path="vehicles/:id" element={<VehicleDetailPage />} />
             <Route path="deliveries" element={<DeliveriesPage />} />
             <Route path="cylinder-units" element={<CylinderUnitsPage />} />
             <Route path="audit-logs" element={<AuditLogsPage />} />

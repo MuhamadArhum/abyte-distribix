@@ -1,23 +1,31 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { suppliersApi } from '@/lib/api';
-import { DataTable } from '@/components/shared/DataTable';
+import Pagination from '@/components/shared/Pagination';
 import { formatCurrency } from '@/lib/utils';
 import type { Supplier } from '@/types';
-import type { ColumnDef } from '@tanstack/react-table';
+import { useReactTable, getCoreRowModel, flexRender, type ColumnDef } from '@tanstack/react-table';
 
 const EMPTY = { supplierCode: '', supplierName: '', contactPerson: '', phone: '', email: '', address: '', taxNtn: '', openingBalance: 0, paymentTerms: 30 };
+
+interface Summary { total: number; active: number; inactive: number; totalPayables: number; withBalance: number }
 
 export default function SuppliersPage() {
   const navigate = useNavigate();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Filters
+  // Server-side filters — the supplier list is fetched page-by-page instead
+  // of loading the full table (6600+ rows) into the browser every time.
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [filterBalance, setFilterBalance] = useState('ALL');
   const [filterTerms, setFilterTerms] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   // Form
   const [showForm, setShowForm] = useState(false);
@@ -25,11 +33,39 @@ export default function SuppliersPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(EMPTY);
 
-  useEffect(() => { load(); }, []);
+  // Debounce the free-text search so we don't fire a request per keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Any filter change re-starts pagination from page 1.
+  useEffect(() => { setPage(1); }, [search, filterStatus, filterBalance, filterTerms]);
+
+  useEffect(() => { load(); }, [search, filterStatus, filterBalance, filterTerms, page, pageSize]);
+  useEffect(() => { loadSummary(); }, []);
+
   const load = async () => {
-    try { const r = await suppliersApi.getAll(); setSuppliers(r.data); }
-    catch { alert('Failed to load'); } finally { setLoading(false); }
+    setLoading(true);
+    try {
+      const r = await suppliersApi.getAll({
+        search: search || undefined,
+        status: filterStatus !== 'ALL' ? filterStatus : undefined,
+        balance: filterBalance !== 'ALL' ? filterBalance : undefined,
+        paymentTerms: filterTerms !== 'ALL' ? filterTerms : undefined,
+        page, limit: pageSize,
+      });
+      setSuppliers(r.data.data);
+      setTotal(r.data.total);
+    } catch { alert('Failed to load'); }
+    finally { setLoading(false); }
   };
+
+  const loadSummary = async () => {
+    try { const r = await suppliersApi.getSummary(); setSummary(r.data); } catch { /* KPI row just stays blank */ }
+  };
+
+  const refreshAfterMutation = () => { load(); loadSummary(); };
 
   const openAdd = () => { setEditId(null); setForm(EMPTY); setShowForm(true); };
   const openEdit = (s: Supplier) => {
@@ -42,41 +78,28 @@ export default function SuppliersPage() {
     if (!form.supplierCode || !form.supplierName) { alert('Code and Name required'); return; }
     setSaving(true);
     try {
+      if (form.phone) {
+        const dupCheck = await suppliersApi.getAll({ search: form.phone, limit: 5 });
+        const dupe = (dupCheck.data.data as Supplier[] || []).find((s) => s.phone === form.phone && s.id !== editId);
+        if (dupe && !confirm(`Phone ${form.phone} is already used by "${dupe.supplierName}" (${dupe.supplierCode}). Save anyway?`)) {
+          setSaving(false); return;
+        }
+      }
       if (editId) await suppliersApi.update(editId, form);
       else await suppliersApi.create(form);
-      setShowForm(false); load();
+      setShowForm(false); refreshAfterMutation();
     } catch (e: any) { alert(e.response?.data?.message || 'Failed'); } finally { setSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this supplier?')) return;
-    try { await suppliersApi.delete(id); load(); } catch { alert('Failed'); }
+    try { await suppliersApi.delete(id); refreshAfterMutation(); } catch { alert('Failed'); }
   };
 
   const handleToggleStatus = async (s: Supplier) => {
-    try { await suppliersApi.update(s.id, { status: s.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' }); load(); }
+    try { await suppliersApi.update(s.id, { status: s.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' }); refreshAfterMutation(); }
     catch { alert('Failed to update status'); }
   };
-
-  // Filtered data
-  const filtered = useMemo(() => {
-    return suppliers.filter((s) => {
-      const q = search.toLowerCase();
-      const matchSearch = !q || s.supplierName.toLowerCase().includes(q) || s.supplierCode.toLowerCase().includes(q) || s.phone.includes(q) || (s.taxNtn || '').toLowerCase().includes(q) || (s.contactPerson || '').toLowerCase().includes(q);
-      const matchStatus = filterStatus === 'ALL' || s.status === filterStatus;
-      const matchBalance =
-        filterBalance === 'ALL' ? true :
-        filterBalance === 'HAS_BALANCE' ? s.currentBalance > 0 :
-        filterBalance === 'CLEAR' ? s.currentBalance === 0 : true;
-      const matchTerms = filterTerms === 'ALL' || String(s.paymentTerms) === filterTerms;
-      return matchSearch && matchStatus && matchBalance && matchTerms;
-    });
-  }, [suppliers, search, filterStatus, filterBalance, filterTerms]);
-
-  // KPIs
-  const totalPayables = suppliers.reduce((s, sup) => s + (sup.currentBalance > 0 ? sup.currentBalance : 0), 0);
-  const withBalance = suppliers.filter((s) => s.currentBalance > 0).length;
-  const activeCount = suppliers.filter((s) => s.status === 'ACTIVE').length;
 
   const columns: ColumnDef<Supplier>[] = [
     { accessorKey: 'supplierCode', header: 'Code', cell: ({ row }) => <span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{row.original.supplierCode}</span> },
@@ -122,6 +145,11 @@ export default function SuppliersPage() {
     },
   ];
 
+  // Table is rendered manually (not via the shared DataTable) because that
+  // component paginates a fully-loaded array client-side — wrong once the
+  // server itself is only sending one page of rows.
+  const table = useReactTable({ data: suppliers, columns, getCoreRowModel: getCoreRowModel() });
+
   const filtersActive = search || filterStatus !== 'ALL' || filterBalance !== 'ALL' || filterTerms !== 'ALL';
 
   return (
@@ -130,22 +158,22 @@ export default function SuppliersPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
         <div className="kpi-card">
           <div className="kpi-top"><span className="kpi-label">Total Suppliers</span></div>
-          <div className="kpi-value">{suppliers.length}</div>
-          <div className="kpi-sub">{activeCount} active</div>
+          <div className="kpi-value">{summary?.total ?? '—'}</div>
+          <div className="kpi-sub">{summary?.active ?? '—'} active</div>
         </div>
         <div className="kpi-card red">
           <div className="kpi-top"><span className="kpi-label">Total Payables</span></div>
-          <div className="kpi-value">{formatCurrency(totalPayables)}</div>
+          <div className="kpi-value">{formatCurrency(summary?.totalPayables ?? 0)}</div>
           <div className="kpi-sub">Amount we owe</div>
         </div>
         <div className="kpi-card alt">
           <div className="kpi-top"><span className="kpi-label">Pending Payments</span></div>
-          <div className="kpi-value">{withBalance}</div>
+          <div className="kpi-value">{summary?.withBalance ?? '—'}</div>
           <div className="kpi-sub">Suppliers with balance</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-top"><span className="kpi-label">Inactive</span></div>
-          <div className="kpi-value">{suppliers.length - activeCount}</div>
+          <div className="kpi-value">{summary?.inactive ?? '—'}</div>
           <div className="kpi-sub">Inactive accounts</div>
         </div>
       </div>
@@ -154,7 +182,7 @@ export default function SuppliersPage() {
       <div className="panel-head" style={{ background: 'var(--paper-light)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)', marginBottom: 12 }}>
         <div>
           <div className="section-title">Suppliers</div>
-          <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>{filtered.length} of {suppliers.length} shown</div>
+          <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>{total} matching</div>
         </div>
         <button className="ab-btn ab-btn-primary" onClick={openAdd}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -167,8 +195,8 @@ export default function SuppliersPage() {
         <input
           className="ab-input"
           placeholder="Search by name, code, phone, NTN..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           style={{ flex: '1 1 220px', minWidth: 180 }}
         />
         <select className="ab-input ab-select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ flex: '0 0 150px' }}>
@@ -188,7 +216,7 @@ export default function SuppliersPage() {
           <option value="90">90 Days</option>
         </select>
         {filtersActive && (
-          <button className="ab-btn ab-btn-outline" style={{ fontSize: 12 }} onClick={() => { setSearch(''); setFilterStatus('ALL'); setFilterBalance('ALL'); setFilterTerms('ALL'); }}>
+          <button className="ab-btn ab-btn-outline" style={{ fontSize: 12 }} onClick={() => { setSearchInput(''); setFilterStatus('ALL'); setFilterBalance('ALL'); setFilterTerms('ALL'); }}>
             Clear Filters
           </button>
         )}
@@ -196,9 +224,49 @@ export default function SuppliersPage() {
 
       {/* Table */}
       <div className="panel">
-        {loading
-          ? <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>Loading...</div>
-          : <DataTable columns={columns} data={filtered} searchKey="supplierName" searchPlaceholder="" hideSearch />}
+        {loading ? (
+          <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>Loading...</div>
+        ) : (
+          <>
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
+                  {table.getHeaderGroups().map((hg) => (
+                    <tr key={hg.id}>
+                      {hg.headers.map((header) => (
+                        <th key={header.id}>{header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}</th>
+                      ))}
+                    </tr>
+                  ))}
+                </thead>
+                <tbody>
+                  {table.getRowModel().rows.length ? (
+                    table.getRowModel().rows.map((row) => (
+                      <tr key={row.id}>
+                        {row.getVisibleCells().map((cell) => (
+                          <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                        ))}
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={columns.length} style={{ textAlign: 'center', padding: '40px 18px', color: 'var(--steel)', fontFamily: 'IBM Plex Mono, monospace', fontSize: 12 }}>
+                        No records found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              total={total}
+              page={page}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+            />
+          </>
+        )}
       </div>
 
       {/* Add / Edit Modal */}

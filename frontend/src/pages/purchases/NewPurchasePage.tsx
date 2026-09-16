@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { purchasesApi, suppliersApi, gasProductsApi } from '@/lib/api';
+import { purchasesApi, suppliersApi, gasProductsApi, settingsApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import type { Supplier, GasProduct } from '@/types';
 
@@ -22,6 +22,15 @@ export default function NewPurchasePage() {
     Promise.all([suppliersApi.getAll(), gasProductsApi.getAll()]).then(([s, p]) => {
       setSuppliers(s.data); setProducts(p.data);
     });
+  }, []);
+
+  // Default purchase number honors the configured prefix (Settings ->
+  // Purchase Number Prefix) instead of a hardcoded "PUR".
+  useEffect(() => {
+    settingsApi.getAll().then((r) => {
+      const prefix = (r.data as any[]).find((s) => s.key === 'purchase_prefix')?.value;
+      if (prefix) setForm((f) => ({ ...f, purchaseNumber: `${prefix}-${Date.now()}` }));
+    }).catch(() => undefined);
   }, []);
 
   const gasAmount = form.quantity * form.purchaseRate;

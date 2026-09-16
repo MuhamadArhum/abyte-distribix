@@ -1,159 +1,263 @@
 import React, { useEffect, useState } from 'react';
-import { PageHeader } from '@/components/shared/PageHeader';
 import { deliveriesApi, customersApi, driversApi, vehiclesApi } from '@/lib/api';
 import { Delivery, Customer, Driver, Vehicle } from '@/types';
 import { toast } from 'sonner';
 import { formatDate } from '@/lib/utils';
+import Pagination from '@/components/shared/Pagination';
+import { SearchPicker } from '@/components/shared/SearchPicker';
 
-const STATUS_COLORS: Record<string, string> = {
-  PENDING: 'warning', IN_TRANSIT: 'info', DELIVERED: 'success', FAILED: 'danger', CANCELLED: 'secondary',
+const STATUSES = ['PENDING', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'CANCELLED'];
+const STATUS_PILL: Record<string, string> = {
+  PENDING: 'pill-steel', IN_TRANSIT: 'pill-blue', DELIVERED: 'pill-green', FAILED: 'pill-red', CANCELLED: 'pill-amber',
 };
+const EMPTY_FORM = { deliveryNumber: `DEL-${Date.now()}`, customerId: '', driverId: '', vehicleId: '', deliveryDate: new Date().toISOString().split('T')[0], status: 'PENDING', address: '', notes: '' };
+
+interface Summary { total: number; byStatus: Record<string, number> }
 
 export default function DeliveriesPage() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editDelivery, setEditDelivery] = useState<Delivery | null>(null);
-  const emptyForm = { deliveryNumber: '', customerId: '', driverId: '', vehicleId: '', deliveryDate: '', status: 'PENDING', address: '', notes: '' };
-  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [customerLabel, setCustomerLabel] = useState('');
+  const [driverLabel, setDriverLabel] = useState('');
+  const [vehicleLabel, setVehicleLabel] = useState('');
+
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => { setPage(1); }, [search, filterStatus]);
+  useEffect(() => { load(); }, [search, filterStatus, page, pageSize]);
+  useEffect(() => { loadSummary(); }, []);
 
   const load = async () => {
+    setLoading(true);
     try {
-      const [dRes, cRes, drRes, vRes] = await Promise.all([
-        deliveriesApi.getAll(), customersApi.getAll(), driversApi.getAll(), vehiclesApi.getAll(),
-      ]);
-      setDeliveries(dRes.data); setCustomers(cRes.data); setDrivers(drRes.data); setVehicles(vRes.data);
+      const r = await deliveriesApi.getAll({ search: search || undefined, status: filterStatus !== 'ALL' ? filterStatus : undefined, page, limit: pageSize });
+      setDeliveries(r.data.data); setTotal(r.data.total);
     } catch { toast.error('Failed to load data'); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
+  const loadSummary = () => {
+    deliveriesApi.getSummary().then((r) => setSummary(r.data)).catch(() => { /* KPI row just stays blank */ });
+  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const refreshAfterMutation = () => { load(); loadSummary(); };
+
+  const openAdd = () => {
+    setEditDelivery(null); setForm({ ...EMPTY_FORM, deliveryNumber: `DEL-${Date.now()}` });
+    setCustomerLabel(''); setDriverLabel(''); setVehicleLabel('');
+    setShowForm(true);
+  };
+
+  const openEdit = (d: Delivery) => {
+    setEditDelivery(d);
+    setForm({ deliveryNumber: d.deliveryNumber, customerId: d.customerId, driverId: d.driverId || '', vehicleId: d.vehicleId || '', deliveryDate: d.deliveryDate.split('T')[0], status: d.status, address: d.address || '', notes: d.notes || '' });
+    setCustomerLabel(d.customer?.businessName || '');
+    setDriverLabel(d.driver?.fullName || '');
+    setVehicleLabel(d.vehicle ? `${d.vehicle.vehicleNumber} (${d.vehicle.vehicleType})` : '');
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.deliveryNumber || !form.customerId || !form.deliveryDate) { alert('Delivery number, customer, and date are required'); return; }
+    setSaving(true);
     try {
       const payload = { ...form, driverId: form.driverId || null, vehicleId: form.vehicleId || null };
       if (editDelivery) { await deliveriesApi.update(editDelivery.id, payload); toast.success('Delivery updated'); }
       else { await deliveriesApi.create(payload); toast.success('Delivery created'); }
-      setShowForm(false); setEditDelivery(null); setForm(emptyForm); load();
-    } catch { toast.error('Operation failed'); }
+      setShowForm(false); refreshAfterMutation();
+    } catch (e: any) { toast.error(e.response?.data?.message || 'Operation failed'); }
+    finally { setSaving(false); }
   };
 
-  const handleEdit = (d: Delivery) => {
-    setEditDelivery(d);
-    setForm({ deliveryNumber: d.deliveryNumber, customerId: d.customerId, driverId: d.driverId || '', vehicleId: d.vehicleId || '', deliveryDate: d.deliveryDate.split('T')[0], status: d.status, address: d.address || '', notes: d.notes || '' });
-    setShowForm(true);
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this delivery?')) return;
-    try { await deliveriesApi.delete(id); toast.success('Deleted'); load(); }
+  const handleDelete = async (id: string, num: string) => {
+    if (!confirm(`Delete delivery ${num}?`)) return;
+    try { await deliveriesApi.delete(id); toast.success('Deleted'); refreshAfterMutation(); }
     catch { toast.error('Delete failed'); }
   };
 
+  const filtersActive = search || filterStatus !== 'ALL';
+
   return (
-    <div className="page-container">
-      <PageHeader title="Deliveries" description="Track cylinder deliveries to customers" action={
-        <button className="btn btn-primary" onClick={() => { setShowForm(true); setEditDelivery(null); setForm(emptyForm); }}>
-          + New Delivery
-        </button>
-      } />
-
-      {showForm && (
-        <div className="card" style={{ marginBottom: 20 }}>
-          <div className="card-header"><h3>{editDelivery ? 'Edit Delivery' : 'New Delivery'}</h3></div>
-          <div className="card-body">
-            <form onSubmit={handleSubmit}>
-              <div className="form-grid">
-                <div className="form-group">
-                  <label>Delivery Number *</label>
-                  <input className="form-input" value={form.deliveryNumber} onChange={e => setForm(f => ({ ...f, deliveryNumber: e.target.value }))} required />
-                </div>
-                <div className="form-group">
-                  <label>Customer *</label>
-                  <select className="form-input" value={form.customerId} onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))} required>
-                    <option value="">Select customer...</option>
-                    {customers.map(c => <option key={c.id} value={c.id}>{c.businessName}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Driver</label>
-                  <select className="form-input" value={form.driverId} onChange={e => setForm(f => ({ ...f, driverId: e.target.value }))}>
-                    <option value="">Select driver...</option>
-                    {drivers.map(d => <option key={d.id} value={d.id}>{d.fullName}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Vehicle</label>
-                  <select className="form-input" value={form.vehicleId} onChange={e => setForm(f => ({ ...f, vehicleId: e.target.value }))}>
-                    <option value="">Select vehicle...</option>
-                    {vehicles.map(v => <option key={v.id} value={v.id}>{v.vehicleNumber} ({v.vehicleType})</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Delivery Date *</label>
-                  <input type="date" className="form-input" value={form.deliveryDate} onChange={e => setForm(f => ({ ...f, deliveryDate: e.target.value }))} required />
-                </div>
-                <div className="form-group">
-                  <label>Status</label>
-                  <select className="form-input" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
-                    <option value="PENDING">Pending</option>
-                    <option value="IN_TRANSIT">In Transit</option>
-                    <option value="DELIVERED">Delivered</option>
-                    <option value="FAILED">Failed</option>
-                    <option value="CANCELLED">Cancelled</option>
-                  </select>
-                </div>
-                <div className="form-group" style={{ gridColumn: '1/-1' }}>
-                  <label>Delivery Address</label>
-                  <input className="form-input" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} />
-                </div>
-                <div className="form-group" style={{ gridColumn: '1/-1' }}>
-                  <label>Notes</label>
-                  <textarea className="form-input" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
-                </div>
-              </div>
-              <div className="form-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Save Delivery</button>
-              </div>
-            </form>
-          </div>
+    <div className="page-content">
+      {/* KPI Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
+        <div className="kpi-card">
+          <div className="kpi-top"><span className="kpi-label">Total Deliveries</span></div>
+          <div className="kpi-value">{summary?.total ?? '—'}</div>
+          <div className="kpi-sub">All records</div>
         </div>
-      )}
+        <div className="kpi-card alt">
+          <div className="kpi-top"><span className="kpi-label">In Transit</span></div>
+          <div className="kpi-value">{summary?.byStatus?.IN_TRANSIT ?? 0}</div>
+          <div className="kpi-sub">On the road</div>
+        </div>
+        <div className="kpi-card green">
+          <div className="kpi-top"><span className="kpi-label">Delivered</span></div>
+          <div className="kpi-value">{summary?.byStatus?.DELIVERED ?? 0}</div>
+          <div className="kpi-sub">Completed</div>
+        </div>
+        <div className="kpi-card red">
+          <div className="kpi-top"><span className="kpi-label">Failed</span></div>
+          <div className="kpi-value">{summary?.byStatus?.FAILED ?? 0}</div>
+          <div className="kpi-sub">Needs follow-up</div>
+        </div>
+      </div>
 
-      <div className="card">
-        <div className="card-body" style={{ padding: 0 }}>
-          {loading ? <div className="loading-state">Loading...</div> : (
+      {/* Header */}
+      <div className="panel-head" style={{ background: 'var(--paper-light)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)', marginBottom: 12 }}>
+        <div>
+          <div className="section-title">Deliveries</div>
+          <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>{total} matching · track cylinder deliveries to customers</div>
+        </div>
+        <button className="ab-btn ab-btn-primary" onClick={openAdd}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Delivery
+        </button>
+      </div>
+
+      {/* Filter Bar */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 12, padding: '12px 14px', background: 'var(--paper-light)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)' }}>
+        <input className="ab-input" placeholder="Search by delivery #, customer..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} style={{ flex: '1 1 220px', minWidth: 180 }} />
+        <select className="ab-input ab-select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ flex: '0 0 160px' }}>
+          <option value="ALL">All Status</option>
+          {STATUSES.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+        </select>
+        {filtersActive && (
+          <button className="ab-btn ab-btn-outline" style={{ fontSize: 12 }} onClick={() => { setSearchInput(''); setFilterStatus('ALL'); }}>
+            Clear Filters
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+      <div className="panel">
+        {loading ? (
+          <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>Loading...</div>
+        ) : deliveries.length === 0 ? (
+          <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>No deliveries found</div>
+        ) : (
+          <div className="table-scroll">
             <table className="data-table">
               <thead>
-                <tr><th>No.</th><th>Customer</th><th>Driver</th><th>Vehicle</th><th>Date</th><th>Status</th><th>Actions</th></tr>
+                <tr><th>No.</th><th>Customer</th><th>Driver</th><th>Vehicle</th><th>Date</th><th>Status</th><th></th></tr>
               </thead>
               <tbody>
-                {deliveries.map(d => (
+                {deliveries.map((d) => (
                   <tr key={d.id}>
-                    <td><code>{d.deliveryNumber}</code></td>
-                    <td>{d.customer?.businessName}</td>
+                    <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600 }}>{d.deliveryNumber}</span></td>
+                    <td><span className="row-title">{d.customer?.businessName || '—'}</span></td>
                     <td>{d.driver?.fullName || '—'}</td>
                     <td>{d.vehicle?.vehicleNumber || '—'}</td>
-                    <td>{formatDate(d.deliveryDate)}</td>
-                    <td><span className={`badge badge-${STATUS_COLORS[d.status] || 'secondary'}`}>{d.status.replace('_', ' ')}</span></td>
+                    <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{formatDate(d.deliveryDate)}</span></td>
+                    <td><span className={`pill ${STATUS_PILL[d.status] || 'pill-steel'}`}>{d.status.replace('_', ' ')}</span></td>
                     <td>
-                      <button className="btn btn-sm btn-secondary" onClick={() => handleEdit(d)}>Edit</button>
-                      {' '}
-                      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(d.id)}>Delete</button>
+                      <div className="row-actions">
+                        <button className="ab-btn ab-btn-icon" title="Edit" onClick={() => openEdit(d)}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button className="ab-btn ab-btn-icon danger" title="Delete" onClick={() => handleDelete(d.id, d.deliveryNumber)}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
-                {deliveries.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32, color: 'var(--steel)' }}>No deliveries found</td></tr>}
               </tbody>
             </table>
-          )}
-        </div>
+          </div>
+        )}
+        {!loading && deliveries.length > 0 && (
+          <Pagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
+        )}
       </div>
+
+      {/* Add / Edit Modal */}
+      {showForm && (
+        <div className="ab-modal-overlay" onClick={() => setShowForm(false)}>
+          <div className="ab-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ab-modal-head">
+              <span className="ab-modal-title">{editDelivery ? 'Edit Delivery' : 'New Delivery'}</span>
+              <button className="ab-btn ab-btn-icon" onClick={() => setShowForm(false)}>✕</button>
+            </div>
+            <div className="ab-modal-body">
+              <div className="ab-form-grid">
+                <div><label className="ab-label">Delivery Number *</label><input className="ab-input" value={form.deliveryNumber} onChange={(e) => setForm({ ...form, deliveryNumber: e.target.value })} /></div>
+                <div><label className="ab-label">Delivery Date *</label><input className="ab-input" type="date" value={form.deliveryDate} onChange={(e) => setForm({ ...form, deliveryDate: e.target.value })} /></div>
+                <div className="span-2">
+                  <label className="ab-label">Customer *</label>
+                  <SearchPicker<Customer>
+                    value={form.customerId}
+                    valueLabel={customerLabel}
+                    placeholder="Type customer name..."
+                    search={(q) => customersApi.getAll({ search: q, page: 1, limit: 8 }).then((r) => r.data.data)}
+                    onSelect={(c) => { setForm({ ...form, customerId: c.id }); setCustomerLabel(c.businessName); }}
+                    renderOption={(c) => (
+                      <div>
+                        <div className="row-title">{c.businessName}</div>
+                        <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)' }}>{c.customerCode}</div>
+                      </div>
+                    )}
+                  />
+                </div>
+                <div>
+                  <label className="ab-label">Driver</label>
+                  <SearchPicker<Driver>
+                    value={form.driverId}
+                    valueLabel={driverLabel}
+                    placeholder="Type driver name..."
+                    search={(q) => driversApi.getAll({ search: q, page: 1, limit: 8 }).then((r) => r.data.data)}
+                    onSelect={(dr) => { setForm({ ...form, driverId: dr.id }); setDriverLabel(dr.fullName); }}
+                    renderOption={(dr) => <div className="row-title">{dr.fullName}</div>}
+                  />
+                </div>
+                <div>
+                  <label className="ab-label">Vehicle</label>
+                  <SearchPicker<Vehicle>
+                    value={form.vehicleId}
+                    valueLabel={vehicleLabel}
+                    placeholder="Type vehicle number..."
+                    search={(q) => vehiclesApi.getAll({ search: q, page: 1, limit: 8 }).then((r) => r.data.data)}
+                    onSelect={(v) => { setForm({ ...form, vehicleId: v.id }); setVehicleLabel(`${v.vehicleNumber} (${v.vehicleType})`); }}
+                    renderOption={(v) => (
+                      <div>
+                        <div className="row-title">{v.vehicleNumber}</div>
+                        <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)' }}>{v.vehicleType}</div>
+                      </div>
+                    )}
+                  />
+                </div>
+                <div>
+                  <label className="ab-label">Status</label>
+                  <select className="ab-input ab-select" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                    {STATUSES.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+                  </select>
+                </div>
+                <div className="span-2"><label className="ab-label">Delivery Address</label><input className="ab-input" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
+                <div className="span-2"><label className="ab-label">Notes</label><input className="ab-input" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+              </div>
+            </div>
+            <div className="ab-modal-foot">
+              <button className="ab-btn ab-btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
+              <button className="ab-btn ab-btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : editDelivery ? 'Update Delivery' : 'Save Delivery'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

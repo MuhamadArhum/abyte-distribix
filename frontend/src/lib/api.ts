@@ -35,13 +35,27 @@ export default api;
 
 // API helpers
 export const authApi = {
-  login: (username: string, password: string) => api.post('/auth/login', { username, password }),
+  login: (username: string, password: string, companyId?: string) =>
+    api.post('/auth/login', { username, password, ...(companyId ? { companyId } : {}) }),
   me: () => api.get('/auth/me'),
   seed: () => api.post('/auth/seed'),
+  seedSuperAdmin: () => api.post('/auth/seed-super-admin'),
+};
+
+export const companiesApi = {
+  getPublic: () => api.get('/companies/public'),
+  getAll: () => api.get('/companies'),
+  getOne: (id: string) => api.get(`/companies/${id}`),
+  create: (data: { name: string; code: string }) => api.post('/companies', data),
+  update: (id: string, data: { name?: string; status?: string }) => api.patch(`/companies/${id}`, data),
 };
 
 export const customersApi = {
-  getAll: () => api.get('/customers'),
+  // No params -> plain array (existing dropdown callers keep working).
+  // With page/limit -> { data, total, page, limit }.
+  getAll: (params?: { search?: string; customerType?: string; status?: string; balance?: string; page?: number; limit?: number }) =>
+    api.get('/customers', { params }),
+  getSummary: () => api.get('/customers/summary'),
   getOne: (id: string) => api.get(`/customers/${id}`),
   getLedger: (id: string) => api.get(`/customers/${id}/ledger`),
   create: (data: any) => api.post('/customers', data),
@@ -50,7 +64,11 @@ export const customersApi = {
 };
 
 export const suppliersApi = {
-  getAll: () => api.get('/suppliers'),
+  // No params -> plain array (existing dropdown callers keep working).
+  // With page/limit -> { data, total, page, limit }.
+  getAll: (params?: { search?: string; status?: string; balance?: string; paymentTerms?: string; page?: number; limit?: number }) =>
+    api.get('/suppliers', { params }),
+  getSummary: () => api.get('/suppliers/summary'),
   getOne: (id: string) => api.get(`/suppliers/${id}`),
   getLedger: (id: string) => api.get(`/suppliers/${id}/ledger`),
   create: (data: any) => api.post('/suppliers', data),
@@ -59,7 +77,12 @@ export const suppliersApi = {
 };
 
 export const gasProductsApi = {
-  getAll: () => api.get('/gas-products'),
+  // No params -> plain array (existing dropdown callers keep working).
+  // With page/limit -> { data, total, page, limit }.
+  getAll: (params?: { search?: string; gasType?: string; status?: string; page?: number; limit?: number }) =>
+    api.get('/gas-products', { params }),
+  getSummary: () => api.get('/gas-products/summary'),
+  getLowStock: () => api.get('/gas-products/low-stock'),
   getOne: (id: string) => api.get(`/gas-products/${id}`),
   create: (data: any) => api.post('/gas-products', data),
   update: (id: string, data: any) => api.patch(`/gas-products/${id}`, data),
@@ -67,7 +90,11 @@ export const gasProductsApi = {
 };
 
 export const storageTanksApi = {
-  getAll: () => api.get('/storage-tanks'),
+  // `page` present -> { data, total, page, limit }. No `page` -> plain array
+  // (Dashboard's getAll({ limit: 20 }) keeps working unchanged).
+  getAll: (params?: { search?: string; status?: string; page?: number; limit?: number }) =>
+    api.get('/storage-tanks', { params }),
+  getSummary: () => api.get('/storage-tanks/summary'),
   getOne: (id: string) => api.get(`/storage-tanks/${id}`),
   create: (data: any) => api.post('/storage-tanks', data),
   update: (id: string, data: any) => api.patch(`/storage-tanks/${id}`, data),
@@ -75,7 +102,11 @@ export const storageTanksApi = {
 };
 
 export const purchasesApi = {
-  getAll: () => api.get('/purchases'),
+  // `page` present -> { data, total, page, limit }. No `page` -> plain array
+  // (GasReceiving/SupplierPayments dropdown callers keep working unchanged).
+  getAll: (params?: { search?: string; status?: string; supplierId?: string; from?: string; to?: string; page?: number; limit?: number }) =>
+    api.get('/purchases', { params }),
+  getSummary: () => api.get('/purchases/summary'),
   getOne: (id: string) => api.get(`/purchases/${id}`),
   create: (data: any) => api.post('/purchases', data),
   update: (id: string, data: any) => api.patch(`/purchases/${id}`, data),
@@ -83,21 +114,28 @@ export const purchasesApi = {
 };
 
 export const gasReceivingApi = {
-  getAll: () => api.get('/gas-receiving'),
+  getAll: (params?: { search?: string; from?: string; to?: string; page?: number; limit?: number }) =>
+    api.get('/gas-receiving', { params }),
+  getSummary: () => api.get('/gas-receiving/summary'),
   getOne: (id: string) => api.get(`/gas-receiving/${id}`),
   create: (data: any) => api.post('/gas-receiving', data),
   update: (id: string, data: any) => api.patch(`/gas-receiving/${id}`, data),
+  delete: (id: string) => api.delete(`/gas-receiving/${id}`),
 };
 
 export const inventoryApi = {
-  getGasStock: () => api.get('/inventory/gas-stock'),
-  getCylinderStock: () => api.get('/inventory/cylinder-stock'),
+  getGasStock: (params?: { search?: string; page?: number; limit?: number }) => api.get('/inventory/gas-stock', { params }),
+  getCylinderStock: (params?: { search?: string; page?: number; limit?: number }) => api.get('/inventory/cylinder-stock', { params }),
   getTransactions: (tankId?: string) => api.get('/inventory/transactions', { params: { tankId } }),
   createAdjustment: (data: any) => api.post('/inventory/adjustment', data),
 };
 
 export const cylindersApi = {
-  getAll: () => api.get('/cylinders'),
+  // `page` present -> { data, total, page, limit }. No `page` -> plain array
+  // (Dashboard/NewSale/NewFilling/CylinderUnits dropdown callers keep working).
+  getAll: (params?: { search?: string; status?: string; page?: number; limit?: number }) =>
+    api.get('/cylinders', { params }),
+  getSummary: () => api.get('/cylinders/summary'),
   getOne: (id: string) => api.get(`/cylinders/${id}`),
   getInventory: () => api.get('/cylinders/inventory'),
   create: (data: any) => api.post('/cylinders', data),
@@ -106,7 +144,9 @@ export const cylindersApi = {
 };
 
 export const fillingApi = {
-  getAll: () => api.get('/filling'),
+  getAll: (params?: { search?: string; status?: string; from?: string; to?: string; page?: number; limit?: number }) =>
+    api.get('/filling', { params }),
+  getSummary: () => api.get('/filling/summary'),
   getOne: (id: string) => api.get(`/filling/${id}`),
   create: (data: any) => api.post('/filling', data),
   update: (id: string, data: any) => api.patch(`/filling/${id}`, data),
@@ -114,22 +154,37 @@ export const fillingApi = {
 };
 
 export const salesApi = {
-  getAll: () => api.get('/sales'),
+  getAll: (params?: { search?: string; status?: string; method?: string; from?: string; to?: string; page?: number; limit?: number }) =>
+    api.get('/sales', { params }),
+  getSummary: () => api.get('/sales/summary'),
   getOne: (id: string) => api.get(`/sales/${id}`),
   create: (data: any) => api.post('/sales', data),
   update: (id: string, data: any) => api.patch(`/sales/${id}`, data),
   delete: (id: string) => api.delete(`/sales/${id}`),
 };
 
+export const saleReturnsApi = {
+  getAll: () => api.get('/sale-returns'),
+  getOne: (id: string) => api.get(`/sale-returns/${id}`),
+  create: (data: any) => api.post('/sale-returns', data),
+};
+
 export const paymentsApi = {
-  getCustomerPayments: () => api.get('/payments/customer'),
+  getCustomerPayments: (params?: { search?: string; method?: string; from?: string; to?: string; page?: number; limit?: number }) =>
+    api.get('/payments/customer', { params }),
+  getCustomerPaymentsSummary: () => api.get('/payments/customer/summary'),
   createCustomerPayment: (data: any) => api.post('/payments/customer', data),
-  getSupplierPayments: () => api.get('/payments/supplier'),
+  deleteCustomerPayment: (id: string) => api.delete(`/payments/customer/${id}`),
+  getSupplierPayments: (params?: { search?: string; method?: string; from?: string; to?: string; page?: number; limit?: number }) =>
+    api.get('/payments/supplier', { params }),
+  getSupplierPaymentsSummary: () => api.get('/payments/supplier/summary'),
   createSupplierPayment: (data: any) => api.post('/payments/supplier', data),
+  deleteSupplierPayment: (id: string) => api.delete(`/payments/supplier/${id}`),
 };
 
 export const expensesApi = {
-  getAll: () => api.get('/expenses'),
+  getAll: (params?: { search?: string; category?: string; method?: string; from?: string; to?: string; page?: number; limit?: number }) =>
+    api.get('/expenses', { params }),
   getOne: (id: string) => api.get(`/expenses/${id}`),
   getSummary: () => api.get('/expenses/summary'),
   create: (data: any) => api.post('/expenses', data),
@@ -138,8 +193,9 @@ export const expensesApi = {
 };
 
 export const accountingApi = {
-  getCashBook: (params?: any) => api.get('/accounting/cash-book', { params }),
-  getBankBook: (params?: any) => api.get('/accounting/bank-book', { params }),
+  // `page` present -> { data, total, page, limit }. No `page` -> plain array.
+  getCashBook: (params?: { startDate?: string; endDate?: string; page?: number; limit?: number }) => api.get('/accounting/cash-book', { params }),
+  getBankBook: (params?: { startDate?: string; endDate?: string; page?: number; limit?: number }) => api.get('/accounting/bank-book', { params }),
   getProfitLoss: (params?: any) => api.get('/accounting/profit-loss', { params }),
 };
 
@@ -156,7 +212,9 @@ export const reportsApi = {
 };
 
 export const driversApi = {
-  getAll: () => api.get('/drivers'),
+  // `page` present -> { data, total, page, limit }. No `page` -> plain array.
+  getAll: (params?: { search?: string; status?: string; page?: number; limit?: number }) => api.get('/drivers', { params }),
+  getSummary: () => api.get('/drivers/summary'),
   getOne: (id: string) => api.get(`/drivers/${id}`),
   create: (data: any) => api.post('/drivers', data),
   update: (id: string, data: any) => api.patch(`/drivers/${id}`, data),
@@ -164,7 +222,9 @@ export const driversApi = {
 };
 
 export const vehiclesApi = {
-  getAll: () => api.get('/vehicles'),
+  // `page` present -> { data, total, page, limit }. No `page` -> plain array.
+  getAll: (params?: { search?: string; status?: string; page?: number; limit?: number }) => api.get('/vehicles', { params }),
+  getSummary: () => api.get('/vehicles/summary'),
   getOne: (id: string) => api.get(`/vehicles/${id}`),
   create: (data: any) => api.post('/vehicles', data),
   update: (id: string, data: any) => api.patch(`/vehicles/${id}`, data),
@@ -172,7 +232,8 @@ export const vehiclesApi = {
 };
 
 export const deliveriesApi = {
-  getAll: () => api.get('/deliveries'),
+  getAll: (params?: { search?: string; status?: string; page?: number; limit?: number }) => api.get('/deliveries', { params }),
+  getSummary: () => api.get('/deliveries/summary'),
   getOne: (id: string) => api.get(`/deliveries/${id}`),
   create: (data: any) => api.post('/deliveries', data),
   update: (id: string, data: any) => api.patch(`/deliveries/${id}`, data),
@@ -180,7 +241,8 @@ export const deliveriesApi = {
 };
 
 export const cylinderUnitsApi = {
-  getAll: (params?: { status?: string; cylinderTypeId?: string }) => api.get('/cylinder-units', { params }),
+  getAll: (params?: { status?: string; cylinderTypeId?: string; search?: string; page?: number; limit?: number }) => api.get('/cylinder-units', { params }),
+  getSummary: () => api.get('/cylinder-units/summary'),
   getOne: (id: string) => api.get(`/cylinder-units/${id}`),
   getBySerial: (serial: string) => api.get(`/cylinder-units/by-serial/${serial}`),
   create: (data: any) => api.post('/cylinder-units', data),
@@ -189,7 +251,7 @@ export const cylinderUnitsApi = {
 };
 
 export const dashboardApi = {
-  getStats: () => api.get('/dashboard/stats'),
+  getStats: (params?: { range?: string; from?: string; to?: string }) => api.get('/dashboard/stats', { params }),
   getSalesChart: () => api.get('/dashboard/sales-chart'),
   getRecentSales: () => api.get('/dashboard/recent-sales'),
   getPendingPurchases: () => api.get('/dashboard/pending-purchases'),
@@ -197,7 +259,7 @@ export const dashboardApi = {
 };
 
 export const usersApi = {
-  getAll: () => api.get('/users'),
+  getAll: (params?: { search?: string; page?: number; limit?: number }) => api.get('/users', { params }),
   getOne: (id: string) => api.get(`/users/${id}`),
   create: (data: any) => api.post('/users', data),
   update: (id: string, data: any) => api.patch(`/users/${id}`, data),
@@ -211,12 +273,13 @@ export const settingsApi = {
 };
 
 export const auditLogsApi = {
-  getAll: (params?: { module?: string; userId?: string }) => api.get('/audit-logs', { params }),
+  getAll: (params?: { module?: string; userId?: string; page?: number; limit?: number }) => api.get('/audit-logs', { params }),
   getOne: (id: string) => api.get(`/audit-logs/${id}`),
+  getModules: () => api.get('/audit-logs/modules'),
 };
 
 export const rolesApi = {
-  getAll: () => api.get('/roles'),
+  getAll: (params?: { search?: string; page?: number; limit?: number }) => api.get('/roles', { params }),
   getOne: (id: string) => api.get(`/roles/${id}`),
   create: (data: any) => api.post('/roles', data),
   update: (id: string, data: any) => api.patch(`/roles/${id}`, data),

@@ -1,12 +1,12 @@
-import { IsString, IsNotEmpty, IsNumber, IsOptional, IsDateString } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsOptional, IsDateString, Min } from 'class-validator';
 
 export class CreateGasReceivingDto {
   @IsString() @IsNotEmpty() receivingNumber: string;
   @IsString() @IsNotEmpty() purchaseId: string;
   @IsString() @IsNotEmpty() supplierId: string;
   @IsDateString() receivingDate: string;
-  @IsNumber() expectedQuantity: number;
-  @IsNumber() receivedQuantity: number;
+  @IsNumber() @Min(0.01) expectedQuantity: number;
+  @IsNumber() @Min(0.01) receivedQuantity: number;
   @IsString() @IsOptional() unit?: string;
   @IsString() @IsNotEmpty() tankId: string;
   @IsString() @IsOptional() receivedById?: string;

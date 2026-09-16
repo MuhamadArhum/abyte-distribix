@@ -3,6 +3,20 @@ import { reportsApi } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { exportToExcel, exportMultiSheetExcel, exportToPdf } from '@/lib/export';
 
+// A wide date range can return thousands of rows — exports still use the
+// full dataset, but rendering all of them as DOM rows at once can freeze
+// the tab, so the on-screen view is capped.
+const DISPLAY_CAP = 200;
+
+function TruncationNotice({ total }: { total: number }) {
+  if (total <= DISPLAY_CAP) return null;
+  return (
+    <div style={{ padding: '8px 14px', marginBottom: 10, background: 'rgba(201,138,30,0.1)', border: '1px solid var(--amber-warn)', borderRadius: 'var(--radius)', fontSize: 11, color: 'var(--amber-warn)', fontFamily: 'IBM Plex Mono,monospace' }}>
+      Showing {DISPLAY_CAP} of {total} — use Export for the complete report
+    </div>
+  );
+}
+
 const REPORT_TYPES = [
   { id: 'sales', label: 'Sales Report', description: 'Daily/monthly sales with customer details', hasDateFilter: true },
   { id: 'purchases', label: 'Purchase Report', description: 'Gas purchases from suppliers', hasDateFilter: true },
@@ -168,10 +182,10 @@ export default function ReportsPage() {
     }
   };
 
-  const handleExportPdf = () => {
+  const handleExportPdf = async () => {
     if (!data) return;
     const { filename, pdf } = buildExport(selectedReport, data);
-    exportToPdf(filename, pdf.title, pdf.head, pdf.body);
+    await exportToPdf(filename, pdf.title, pdf.head, pdf.body);
   };
 
   return (
@@ -243,8 +257,9 @@ export default function ReportsPage() {
               <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginBottom: 12 }}>
                 {data.length} sales · Revenue: {formatCurrency(data.reduce((s: number, i: any) => s + i.netTotal, 0))}
               </div>
+              <TruncationNotice total={data.length} />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {data.slice(0, 50).map((sale: any) => (
+                {data.slice(0, DISPLAY_CAP).map((sale: any) => (
                   <div key={sale.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)', fontSize: 13 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                       <span style={{ fontFamily: 'IBM Plex Mono,monospace', fontWeight: 600, fontSize: 12 }}>{sale.invoiceNumber}</span>
@@ -266,6 +281,7 @@ export default function ReportsPage() {
               <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginBottom: 12 }}>
                 {data.length} purchases · Total: {formatCurrency(data.reduce((s: number, i: any) => s + i.netAmount, 0))}
               </div>
+              <TruncationNotice total={data.length} />
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: 'var(--blueprint)', color: 'var(--paper-light)' }}>
@@ -279,7 +295,7 @@ export default function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.map((p: any) => (
+                  {data.slice(0, DISPLAY_CAP).map((p: any) => (
                     <tr key={p.id} style={{ borderBottom: '1px solid var(--rule)' }}>
                       <td style={{ padding: '8px 12px', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{p.purchaseNumber}</td>
                       <td style={{ padding: '8px 12px' }}>{p.supplier?.supplierName}</td>
@@ -299,9 +315,10 @@ export default function ReportsPage() {
           {selectedReport === 'receivables' && Array.isArray(data) && (
             <div>
               <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginBottom: 12 }}>
-                Total Receivables: {formatCurrency(data.reduce((s: number, i: any) => s + i.currentBalance, 0))}
+                {data.length} customers · Total Receivables: {formatCurrency(data.reduce((s: number, i: any) => s + i.currentBalance, 0))}
               </div>
-              {data.map((c: any) => (
+              <TruncationNotice total={data.length} />
+              {data.slice(0, DISPLAY_CAP).map((c: any) => (
                 <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)', fontSize: 13, marginBottom: 8 }}>
                   <div>
                     <span style={{ fontWeight: 600 }}>{c.businessName}</span>
@@ -316,9 +333,10 @@ export default function ReportsPage() {
           {selectedReport === 'payables' && Array.isArray(data) && (
             <div>
               <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginBottom: 12 }}>
-                Total Payables: {formatCurrency(data.reduce((s: number, i: any) => s + i.currentBalance, 0))}
+                {data.length} suppliers · Total Payables: {formatCurrency(data.reduce((s: number, i: any) => s + i.currentBalance, 0))}
               </div>
-              {data.map((s: any) => (
+              <TruncationNotice total={data.length} />
+              {data.slice(0, DISPLAY_CAP).map((s: any) => (
                 <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)', fontSize: 13, marginBottom: 8 }}>
                   <div>
                     <span style={{ fontWeight: 600 }}>{s.supplierName}</span>
@@ -333,8 +351,9 @@ export default function ReportsPage() {
           {selectedReport === 'inventory' && data && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div>
-                <div style={{ fontFamily: 'Oswald,sans-serif', fontSize: 13, fontWeight: 600, marginBottom: 10, letterSpacing: '0.04em', color: 'var(--ink)' }}>GAS TANKS</div>
-                {data.gasTanks?.map((t: any) => (
+                <div style={{ fontFamily: 'Oswald,sans-serif', fontSize: 13, fontWeight: 600, marginBottom: 10, letterSpacing: '0.04em', color: 'var(--ink)' }}>GAS TANKS ({data.gasTanks?.length ?? 0})</div>
+                <TruncationNotice total={data.gasTanks?.length ?? 0} />
+                {data.gasTanks?.slice(0, DISPLAY_CAP).map((t: any) => (
                   <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)', fontSize: 13, marginBottom: 8 }}>
                     <span style={{ fontWeight: 600 }}>{t.tankName}</span>
                     <span style={{ fontFamily: 'IBM Plex Mono,monospace' }}>{t.currentQuantity} / {t.capacity} KG</span>
@@ -342,8 +361,9 @@ export default function ReportsPage() {
                 ))}
               </div>
               <div>
-                <div style={{ fontFamily: 'Oswald,sans-serif', fontSize: 13, fontWeight: 600, marginBottom: 10, letterSpacing: '0.04em', color: 'var(--ink)' }}>CYLINDERS</div>
-                {data.cylinders?.map((c: any) => (
+                <div style={{ fontFamily: 'Oswald,sans-serif', fontSize: 13, fontWeight: 600, marginBottom: 10, letterSpacing: '0.04em', color: 'var(--ink)' }}>CYLINDERS ({data.cylinders?.length ?? 0})</div>
+                <TruncationNotice total={data.cylinders?.length ?? 0} />
+                {data.cylinders?.slice(0, DISPLAY_CAP).map((c: any) => (
                   <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)', fontSize: 13, marginBottom: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontWeight: 600 }}>{c.cylinderType?.cylinderSize}</span>
@@ -433,7 +453,8 @@ export default function ReportsPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               {data.fillingBatches && (
                 <div>
-                  <div style={{ fontFamily: 'Oswald,sans-serif', fontSize: 13, fontWeight: 600, marginBottom: 10, letterSpacing: '0.04em' }}>FILLING BATCHES</div>
+                  <div style={{ fontFamily: 'Oswald,sans-serif', fontSize: 13, fontWeight: 600, marginBottom: 10, letterSpacing: '0.04em' }}>FILLING BATCHES ({data.fillingBatches.length})</div>
+                  <TruncationNotice total={data.fillingBatches.length} />
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr style={{ background: 'var(--blueprint)', color: 'var(--paper-light)' }}>
@@ -446,7 +467,7 @@ export default function ReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {data.fillingBatches.map((b: any) => (
+                      {data.fillingBatches.slice(0, DISPLAY_CAP).map((b: any) => (
                         <tr key={b.id} style={{ borderBottom: '1px solid var(--rule)' }}>
                           <td style={{ padding: '8px 12px', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{b.batchNumber}</td>
                           <td style={{ padding: '8px 12px' }}>{formatDate(b.fillingDate)}</td>
@@ -463,7 +484,8 @@ export default function ReportsPage() {
               )}
               {data.transactions && (
                 <div>
-                  <div style={{ fontFamily: 'Oswald,sans-serif', fontSize: 13, fontWeight: 600, marginBottom: 10, letterSpacing: '0.04em' }}>CYLINDER TRANSACTIONS</div>
+                  <div style={{ fontFamily: 'Oswald,sans-serif', fontSize: 13, fontWeight: 600, marginBottom: 10, letterSpacing: '0.04em' }}>CYLINDER TRANSACTIONS ({data.transactions.length})</div>
+                  <TruncationNotice total={data.transactions.length} />
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr style={{ background: 'var(--blueprint)', color: 'var(--paper-light)' }}>
@@ -475,7 +497,7 @@ export default function ReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {data.transactions.map((t: any, idx: number) => (
+                      {data.transactions.slice(0, DISPLAY_CAP).map((t: any, idx: number) => (
                         <tr key={idx} style={{ borderBottom: '1px solid var(--rule)' }}>
                           <td style={{ padding: '8px 12px' }}>{formatDate(t.createdAt)}</td>
                           <td style={{ padding: '8px 12px' }}>{t.transactionType}</td>
@@ -525,6 +547,7 @@ export default function ReportsPage() {
               <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginBottom: 12 }}>
                 {data.length} return(s)
               </div>
+              <TruncationNotice total={data.length} />
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: 'var(--blueprint)', color: 'var(--paper-light)' }}>
@@ -537,7 +560,7 @@ export default function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.map((r: any) => (
+                  {data.slice(0, DISPLAY_CAP).map((r: any) => (
                     <tr key={r.id} style={{ borderBottom: '1px solid var(--rule)' }}>
                       <td style={{ padding: '8px 12px', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{r.returnNumber}</td>
                       <td style={{ padding: '8px 12px' }}>{r.customer?.businessName || '—'}</td>

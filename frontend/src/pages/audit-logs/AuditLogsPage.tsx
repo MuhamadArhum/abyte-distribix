@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { auditLogsApi, usersApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
+import { SearchPicker } from '@/components/shared/SearchPicker';
 import type { AuditLog, User } from '@/types';
+import Pagination from '@/components/shared/Pagination';
 
 const ACTION_COLORS: Record<string, string> = {
   CREATE: 'pill-green', UPDATE: 'pill-amber', DELETE: 'pill-red',
@@ -10,30 +12,34 @@ const ACTION_COLORS: Record<string, string> = {
 
 export default function AuditLogsPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+  const [total, setTotal] = useState(0);
+  const [modules, setModules] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterModule, setFilterModule] = useState('');
   const [filterUser, setFilterUser] = useState('');
+  const [filterUserLabel, setFilterUserLabel] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
-  const load = async (mod?: string, uid?: string) => {
+  const load = async (mod?: string, uid?: string, p = page, limit = pageSize) => {
     setLoading(true);
     try {
-      const [logRes, userRes] = await Promise.all([
-        auditLogsApi.getAll({ module: mod || undefined, userId: uid || undefined }),
-        usersApi.getAll(),
-      ]);
-      setLogs(logRes.data);
-      setUsers(userRes.data);
+      const logRes = await auditLogsApi.getAll({ module: mod || undefined, userId: uid || undefined, page: p, limit });
+      setLogs(logRes.data.data);
+      setTotal(logRes.data.total);
     } catch { /* silent */ }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    auditLogsApi.getModules().then((r) => setModules(r.data)).catch(() => {});
+  }, []);
 
-  const handleApply = () => load(filterModule, filterUser);
+  useEffect(() => { load(filterModule, filterUser, page, pageSize); }, [page, pageSize]);
 
-  const modules = Array.from(new Set(logs.map((l) => l.module))).sort();
+  const handleApply = () => { setPage(1); load(filterModule, filterUser, 1, pageSize); };
+  const handleClear = () => { setFilterModule(''); setFilterUser(''); setFilterUserLabel(''); setPage(1); load('', '', 1, pageSize); };
 
   const formatValue = (val?: string) => {
     if (!val) return null;
@@ -49,7 +55,7 @@ export default function AuditLogsPage() {
       <div style={{ marginBottom: 16 }}>
         <div className="section-title">Audit Logs</div>
         <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>
-          System activity trail — last 200 records
+          System activity trail — {total.toLocaleString()} total records
         </div>
       </div>
 
@@ -62,17 +68,26 @@ export default function AuditLogsPage() {
             {modules.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
         </div>
-        <div>
+        <div style={{ width: 220 }}>
           <label className="ab-label">User</label>
-          <select className="ab-input" value={filterUser} onChange={(e) => setFilterUser(e.target.value)} style={{ width: 200 }}>
-            <option value="">All Users</option>
-            {users.map((u) => <option key={u.id} value={u.id}>{u.fullName}</option>)}
-          </select>
+          <SearchPicker<User>
+            value={filterUser}
+            valueLabel={filterUserLabel}
+            placeholder={filterUser ? filterUserLabel : 'All Users — type to filter...'}
+            search={(q) => usersApi.getAll({ search: q, page: 1, limit: 8 }).then((r) => r.data.data)}
+            onSelect={(u) => { setFilterUser(u.id); setFilterUserLabel(u.fullName); }}
+            renderOption={(u) => (
+              <div>
+                <div className="row-title">{u.fullName}</div>
+                <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)' }}>@{u.username}</div>
+              </div>
+            )}
+          />
         </div>
         <button className="ab-btn ab-btn-primary" onClick={handleApply} disabled={loading}>
           {loading ? 'Loading...' : 'Apply Filter'}
         </button>
-        <button className="ab-btn ab-btn-outline" onClick={() => { setFilterModule(''); setFilterUser(''); load(); }}>
+        <button className="ab-btn ab-btn-outline" onClick={handleClear}>
           Clear
         </button>
       </div>
@@ -80,10 +95,10 @@ export default function AuditLogsPage() {
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
         {[
-          { label: 'Total Entries', val: logs.length },
-          { label: 'Creates', val: logs.filter((l) => l.action === 'CREATE').length },
-          { label: 'Updates', val: logs.filter((l) => l.action === 'UPDATE').length },
-          { label: 'Deletes', val: logs.filter((l) => l.action === 'DELETE').length },
+          { label: 'Total Entries', val: total },
+          { label: 'Creates (this page)', val: logs.filter((l) => l.action === 'CREATE').length },
+          { label: 'Updates (this page)', val: logs.filter((l) => l.action === 'UPDATE').length },
+          { label: 'Deletes (this page)', val: logs.filter((l) => l.action === 'DELETE').length },
         ].map(({ label, val }) => (
           <div key={label} className="kpi-card">
             <div className="kpi-top"><span className="kpi-label">{label}</span></div>
@@ -176,6 +191,9 @@ export default function AuditLogsPage() {
               ))}
             </tbody>
           </table>
+        )}
+        {!loading && total > 0 && (
+          <Pagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(s) => { setPageSize(s); setPage(1); }} />
         )}
       </div>
     </div>

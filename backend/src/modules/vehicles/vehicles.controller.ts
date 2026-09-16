@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
 import { VehiclesService } from './vehicles.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -10,9 +10,19 @@ import { Roles } from '../../common/decorators/roles.decorator';
 export class VehiclesController {
   constructor(private readonly vehiclesService: VehiclesService) {}
 
-  @Get() findAll() { return this.vehiclesService.findAll(); }
-  @Get(':id') findOne(@Param('id') id: string) { return this.vehiclesService.findOne(id); }
-  @Post() create(@Body() dto: any) { return this.vehiclesService.create(dto); }
-  @Patch(':id') update(@Param('id') id: string, @Body() dto: any) { return this.vehiclesService.update(id, dto); }
-  @Delete(':id') remove(@Param('id') id: string) { return this.vehiclesService.remove(id); }
+  @Get()
+  findAll(
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Request() req?: any,
+  ) {
+    return this.vehiclesService.findAll(req.user?.companyId, search, status, page !== undefined ? Number(page) : undefined, limit !== undefined ? Number(limit) : undefined);
+  }
+  @Get('summary') getSummary(@Request() req: any) { return this.vehiclesService.getSummary(req.user?.companyId); }
+  @Get(':id') findOne(@Param('id') id: string, @Request() req: any) { return this.vehiclesService.findOne(id, req.user?.companyId); }
+  @Post() create(@Body() dto: any, @Request() req: any) { return this.vehiclesService.create(dto, req.user?.companyId); }
+  @Patch(':id') update(@Param('id') id: string, @Body() dto: any, @Request() req: any) { return this.vehiclesService.update(id, dto, req.user?.companyId); }
+  @Delete(':id') remove(@Param('id') id: string, @Request() req: any) { return this.vehiclesService.remove(id, req.user?.companyId); }
 }

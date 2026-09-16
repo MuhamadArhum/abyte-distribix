@@ -1,12 +1,11 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { salesApi } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { usePagination } from '@/hooks/usePagination';
 import Pagination from '@/components/shared/Pagination';
 import type { Sale } from '@/types';
 
-const today = new Date().toISOString().split('T')[0];
+const PAYMENT_METHODS = ['CASH', 'CREDIT', 'BANK', 'CHEQUE'];
 
 const statusPill = (s: string) => {
   if (s === 'PAID') return <span className="pill pill-green">Paid</span>;
@@ -14,54 +13,59 @@ const statusPill = (s: string) => {
   return <span className="pill pill-red">Unpaid</span>;
 };
 
+interface Summary { total: number; todayRevenue: number; todayCount: number; monthRevenue: number; totalOutstanding: number; unpaidCount: number }
+
 export default function SalesPage() {
   const navigate = useNavigate();
   const [sales, setSales] = useState<Sale[]>([]);
+  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [filterMethod, setFilterMethod] = useState('ALL');
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => { setPage(1); }, [search, filterStatus, filterMethod, startDate, endDate]);
+  useEffect(() => { load(); }, [search, filterStatus, filterMethod, startDate, endDate, page, pageSize]);
+  useEffect(() => { loadSummary(); }, []);
 
   const load = () => {
     setLoading(true);
-    salesApi.getAll().then((r) => setSales(r.data)).catch(() => alert('Failed to load')).finally(() => setLoading(false));
+    salesApi.getAll({
+      search: search || undefined,
+      status: filterStatus !== 'ALL' ? filterStatus : undefined,
+      method: filterMethod !== 'ALL' ? filterMethod : undefined,
+      from: startDate || undefined,
+      to: endDate || undefined,
+      page, limit: pageSize,
+    }).then((r) => { setSales(r.data.data); setTotal(r.data.total); })
+      .catch(() => alert('Failed to load'))
+      .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  const loadSummary = () => {
+    salesApi.getSummary().then((r) => setSummary(r.data)).catch(() => { /* KPI row just stays blank */ });
+  };
+
+  const refreshAfterMutation = () => { load(); loadSummary(); };
 
   const handleDelete = async (id: string, inv: string) => {
     if (!confirm(`Delete invoice ${inv}? This cannot be undone.`)) return;
-    try { await salesApi.delete(id); load(); } catch { alert('Failed to delete'); }
+    try { await salesApi.delete(id); refreshAfterMutation(); } catch { alert('Failed to delete'); }
   };
 
-  const filtered = useMemo(() => {
-    return sales.filter((s) => {
-      const q = search.toLowerCase();
-      const matchSearch = !q || s.invoiceNumber.toLowerCase().includes(q) || (s.customer?.businessName || '').toLowerCase().includes(q);
-      const matchStatus = filterStatus === 'ALL' || s.paymentStatus === filterStatus;
-      const matchMethod = filterMethod === 'ALL' || s.paymentMethod === filterMethod;
-      const saleDate = s.saleDate?.split('T')[0] || '';
-      const matchDate = saleDate >= startDate && saleDate <= endDate;
-      return matchSearch && matchStatus && matchMethod && matchDate;
-    });
-  }, [sales, search, filterStatus, filterMethod, startDate, endDate]);
-
-  // KPIs
-  const todaySales = sales.filter((s) => (s.saleDate?.split('T')[0] || '') === today);
-  const todayRevenue = todaySales.reduce((sum, s) => sum + s.netTotal, 0);
-  const thisMonth = new Date().toISOString().slice(0, 7);
-  const monthRevenue = sales.filter((s) => (s.saleDate || '').startsWith(thisMonth)).reduce((sum, s) => sum + s.netTotal, 0);
-  const totalOutstanding = sales.reduce((sum, s) => sum + s.remainingAmount, 0);
-  const unpaidCount = sales.filter((s) => s.paymentStatus !== 'PAID').length;
-
-  const filtersActive = search || filterStatus !== 'ALL' || filterMethod !== 'ALL' || startDate !== today || endDate !== today;
-
-  const { paged, page, pageSize, setPage, setPageSize } = usePagination(filtered);
-
-  const methods = [...new Set(sales.map((s) => s.paymentMethod).filter(Boolean))];
+  const filtersActive = search || filterStatus !== 'ALL' || filterMethod !== 'ALL' || startDate || endDate;
 
   return (
     <div className="page-content">
@@ -69,22 +73,22 @@ export default function SalesPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
         <div className="kpi-card">
           <div className="kpi-top"><span className="kpi-label">Today's Revenue</span></div>
-          <div className="kpi-value" style={{ fontSize: 18 }}>{formatCurrency(todayRevenue)}</div>
-          <div className="kpi-sub">{todaySales.length} invoices today</div>
+          <div className="kpi-value" style={{ fontSize: 18 }}>{formatCurrency(summary?.todayRevenue ?? 0)}</div>
+          <div className="kpi-sub">{summary?.todayCount ?? 0} invoices today</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-top"><span className="kpi-label">This Month</span></div>
-          <div className="kpi-value" style={{ fontSize: 18 }}>{formatCurrency(monthRevenue)}</div>
+          <div className="kpi-value" style={{ fontSize: 18 }}>{formatCurrency(summary?.monthRevenue ?? 0)}</div>
           <div className="kpi-sub">Month-to-date sales</div>
         </div>
         <div className="kpi-card alt">
           <div className="kpi-top"><span className="kpi-label">Outstanding</span></div>
-          <div className="kpi-value" style={{ fontSize: 18, color: 'var(--amber-warn)' }}>{formatCurrency(totalOutstanding)}</div>
-          <div className="kpi-sub">{unpaidCount} unpaid / partial</div>
+          <div className="kpi-value" style={{ fontSize: 18, color: 'var(--amber-warn)' }}>{formatCurrency(summary?.totalOutstanding ?? 0)}</div>
+          <div className="kpi-sub">{summary?.unpaidCount ?? 0} unpaid / partial</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-top"><span className="kpi-label">Total Invoices</span></div>
-          <div className="kpi-value" style={{ fontSize: 18 }}>{sales.length}</div>
+          <div className="kpi-value" style={{ fontSize: 18 }}>{summary?.total ?? '—'}</div>
           <div className="kpi-sub">All time records</div>
         </div>
       </div>
@@ -93,7 +97,7 @@ export default function SalesPage() {
       <div className="panel-head" style={{ background: 'var(--paper-light)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)', marginBottom: 12 }}>
         <div>
           <div className="section-title">Sales</div>
-          <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>{filtered.length} of {sales.length} shown</div>
+          <div style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 11, color: 'var(--steel)', marginTop: 2 }}>{total} matching</div>
         </div>
         <button className="ab-btn ab-btn-primary" onClick={() => navigate('/sales/new')}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -106,8 +110,8 @@ export default function SalesPage() {
         <input
           className="ab-input"
           placeholder="Search invoice # or customer..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           style={{ flex: '1 1 200px', minWidth: 160 }}
         />
         <select className="ab-input ab-select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ flex: '0 0 150px' }}>
@@ -118,14 +122,14 @@ export default function SalesPage() {
         </select>
         <select className="ab-input ab-select" value={filterMethod} onChange={(e) => setFilterMethod(e.target.value)} style={{ flex: '0 0 150px' }}>
           <option value="ALL">All Methods</option>
-          {methods.map((m) => <option key={m} value={m}>{m}</option>)}
+          {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
         <span style={{ fontSize: 12, color: 'var(--steel)', whiteSpace: 'nowrap', alignSelf: 'center' }}>From</span>
         <input className="ab-input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ flex: '0 0 140px' }} />
         <span style={{ fontSize: 12, color: 'var(--steel)', whiteSpace: 'nowrap', alignSelf: 'center' }}>To</span>
         <input className="ab-input" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ flex: '0 0 140px' }} />
         {filtersActive && (
-          <button className="ab-btn ab-btn-outline" style={{ fontSize: 12 }} onClick={() => { setSearch(''); setFilterStatus('ALL'); setFilterMethod('ALL'); setStartDate(today); setEndDate(today); }}>
+          <button className="ab-btn ab-btn-outline" style={{ fontSize: 12 }} onClick={() => { setSearchInput(''); setFilterStatus('ALL'); setFilterMethod('ALL'); setStartDate(''); setEndDate(''); }}>
             Clear Filters
           </button>
         )}
@@ -135,51 +139,53 @@ export default function SalesPage() {
       <div className="panel">
         {loading ? (
           <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>Loading...</div>
-        ) : filtered.length === 0 ? (
+        ) : sales.length === 0 ? (
           <div style={{ padding: 48, textAlign: 'center', color: 'var(--steel)', fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>No sales found</div>
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Invoice</th>
-                <th>Customer</th>
-                <th>Date</th>
-                <th style={{ textAlign: 'right' }}>Net Total</th>
-                <th style={{ textAlign: 'right' }}>Paid</th>
-                <th style={{ textAlign: 'right' }}>Balance</th>
-                <th>Method</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {paged.map((s) => (
-                <tr key={s.id}>
-                  <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600 }}>{s.invoiceNumber}</span></td>
-                  <td><span className="row-title">{s.customer?.businessName || '—'}</span></td>
-                  <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{formatDate(s.saleDate)}</span></td>
-                  <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600 }}>{formatCurrency(s.netTotal)}</span></td>
-                  <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, color: 'var(--green-ok)' }}>{formatCurrency(s.paidAmount)}</span></td>
-                  <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, color: s.remainingAmount > 0 ? 'var(--amber-warn)' : 'var(--steel)' }}>{formatCurrency(s.remainingAmount)}</span></td>
-                  <td><span className="pill pill-steel" style={{ fontSize: 11 }}>{s.paymentMethod}</span></td>
-                  <td>{statusPill(s.paymentStatus)}</td>
-                  <td>
-                    <div className="row-actions">
-                      <button className="ab-btn ab-btn-icon" title="View Invoice" onClick={() => navigate(`/sales/${s.id}`)}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                      </button>
-                      <button className="ab-btn ab-btn-icon danger" title="Delete" onClick={() => handleDelete(s.id, s.invoiceNumber)}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-                      </button>
-                    </div>
-                  </td>
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Invoice</th>
+                  <th>Customer</th>
+                  <th>Date</th>
+                  <th style={{ textAlign: 'right' }}>Net Total</th>
+                  <th style={{ textAlign: 'right' }}>Paid</th>
+                  <th style={{ textAlign: 'right' }}>Balance</th>
+                  <th>Method</th>
+                  <th>Status</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {sales.map((s) => (
+                  <tr key={s.id}>
+                    <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600 }}>{s.invoiceNumber}</span></td>
+                    <td><span className="row-title">{s.customer?.businessName || '—'}</span></td>
+                    <td><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12 }}>{formatDate(s.saleDate)}</span></td>
+                    <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, fontWeight: 600 }}>{formatCurrency(s.netTotal)}</span></td>
+                    <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, color: 'var(--green-ok)' }}>{formatCurrency(s.paidAmount)}</span></td>
+                    <td style={{ textAlign: 'right' }}><span style={{ fontFamily: 'IBM Plex Mono,monospace', fontSize: 12, color: s.remainingAmount > 0 ? 'var(--amber-warn)' : 'var(--steel)' }}>{formatCurrency(s.remainingAmount)}</span></td>
+                    <td><span className="pill pill-steel" style={{ fontSize: 11 }}>{s.paymentMethod}</span></td>
+                    <td>{statusPill(s.paymentStatus)}</td>
+                    <td>
+                      <div className="row-actions">
+                        <button className="ab-btn ab-btn-icon" title="View Invoice" onClick={() => navigate(`/sales/${s.id}`)}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </button>
+                        <button className="ab-btn ab-btn-icon danger" title="Delete" onClick={() => handleDelete(s.id, s.invoiceNumber)}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-        {!loading && filtered.length > 0 && (
-          <Pagination total={filtered.length} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
+        {!loading && sales.length > 0 && (
+          <Pagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
         )}
       </div>
     </div>
