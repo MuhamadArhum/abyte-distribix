@@ -34,7 +34,7 @@ async function bootstrap() {
   // header at all. Extra origins (e.g. a future hosted deployment) can be
   // added via CORS_ALLOWED_ORIGINS without another code change.
   const extraOrigins = (process.env.CORS_ALLOWED_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean);
-  const allowedOrigins = new Set(['null', 'http://localhost:5176', ...extraOrigins]);
+  const allowedOrigins = new Set(['null', 'http://localhost:5182', ...extraOrigins]);
   app.enableCors({
     origin: (origin, callback) => {
       if (!origin || allowedOrigins.has(origin)) callback(null, true);
@@ -44,7 +44,8 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalFilters(new PrismaExceptionFilter());
   app.setGlobalPrefix('api');
-  await app.listen(3005);
-  console.log('AbyteDistribix backend running on http://localhost:3005');
+  const port = process.env.PORT || 3009;
+  await app.listen(port);
+  console.log(`AbyteDistribix backend running on http://localhost:${port}`);
 }
 bootstrap();

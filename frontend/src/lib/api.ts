@@ -2,9 +2,9 @@ import axios from 'axios';
 import { toast } from 'sonner';
 
 // Falls back to the Electron/local-dev default so nothing breaks for the
-// current desktop packaging (backend always spawned on localhost:3005) —
+// current desktop packaging (backend always spawned on localhost:3009) —
 // override with VITE_API_BASE_URL at build time for any other deployment.
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3005/api';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3009/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,

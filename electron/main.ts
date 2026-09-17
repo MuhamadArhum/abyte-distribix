@@ -7,8 +7,8 @@ import * as crypto from 'crypto';
 let mainWindow: BrowserWindow | null = null;
 let backendProcess: ChildProcess | null = null;
 
-const BACKEND_PORT = 3005;
-const FRONTEND_PORT = 5176;
+const BACKEND_PORT = 3009;
+const FRONTEND_PORT = 5182;
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
 const dbPath = path.join(app.getPath('userData'), 'abyte.db');
